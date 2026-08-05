@@ -127,6 +127,28 @@ code { background: #eef1f5; color: var(--brand-strong); padding: 1px 6px; border
 .recent-list .rp-type { color: var(--ink-soft); }
 .kiosk-tips p { color: var(--ink-soft); font-size: .88rem; margin: 0; }
 
+/* Kiosk centralizado (v3) */
+.kiosk-center { max-width: 560px; margin: 3vh auto 0; display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center; }
+.kiosk-center .clock-card { width: 100%; padding: 26px; }
+.kiosk-center .clock-time { font-size: 3rem; }
+.kiosk-howto { color: var(--ink-soft); font-size: .95rem; max-width: 440px; margin: 0; line-height: 1.55; }
+.btn-punch-circle {
+  width: 210px; height: 210px; border-radius: 50%; border: 0; cursor: pointer;
+  background: linear-gradient(145deg, var(--brand), var(--brand-strong)); color: #fff;
+  font-size: 1.45rem; font-weight: 700; line-height: 1.15; letter-spacing: .3px;
+  box-shadow: 0 12px 30px rgba(193,90,43,.35); transition: transform .12s, box-shadow .12s, filter .12s;
+  display: flex; align-items: center; justify-content: center;
+}
+.btn-punch-circle:hover { transform: translateY(-2px); box-shadow: 0 16px 38px rgba(193,90,43,.42); }
+.btn-punch-circle:active { transform: translateY(0) scale(.98); }
+.btn-punch-circle:disabled { filter: grayscale(.4) opacity(.7); cursor: not-allowed; box-shadow: none; }
+.btn-punch-circle.recording { animation: pulseRec 1.4s ease-in-out infinite; }
+@keyframes pulseRec { 0%,100% { box-shadow: 0 0 0 0 rgba(193,90,43,.45);} 50% { box-shadow: 0 0 0 16px rgba(193,90,43,0);} }
+.kiosk-center .kiosk-status { width: 100%; margin-top: 0; }
+.cam-panel { width: 100%; }
+.cam-panel .cam-wrap { aspect-ratio: 4/3; }
+.kiosk-center .card#dailyCard { width: 100%; text-align: left; }
+
 /* ---------------- Login ---------------- */
 #view-login { display: none; }
 #view-login.active { display: flex; justify-content: center; padding-top: 7vh; }
@@ -325,38 +347,33 @@ tr:last-child td { border-bottom: 0; }
   <main id="app">
     <!-- ================= KIOSK / MARCAÇÃO ================= -->
     <section id="view-kiosk" class="view active">
-      <div class="kiosk-grid">
-        <div class="kiosk-cam card">
+      <div class="kiosk-center">
+        <div class="card clock-card">
+          <div id="clockTime" class="clock-time">--:--:--</div>
+          <div id="clockDate" class="clock-date">—</div>
+        </div>
+
+        <p class="kiosk-howto" id="kioskHowto">
+          Para bater o ponto, clique no botão abaixo e olhe para a câmera.
+          O sistema reconhece você pelo rosto e registra automaticamente.
+          Intervalo mínimo de 5 minutos entre marcações.
+        </p>
+
+        <button id="btnPunch" class="btn-punch-circle">Registrar<br>Ponto</button>
+
+        <div id="kioskStatus" class="kiosk-status idle" style="display:none"></div>
+
+        <div id="camPanel" class="cam-panel" style="display:none">
           <div class="cam-wrap">
             <video id="kioskVideo" autoplay muted playsinline></video>
             <canvas id="kioskOverlay"></canvas>
-            <div id="camPlaceholder" class="cam-placeholder">
-              <div class="spinner"></div>
-              <p>Inicializando câmera e reconhecimento facial…</p>
-            </div>
           </div>
-          <div id="kioskStatus" class="kiosk-status idle">Clique em “Registrar Ponto” e olhe para a câmera</div>
-          <button id="btnPunch" class="btn primary block" style="margin-top:12px;font-size:1.15rem;padding:15px">📷 Registrar Ponto</button>
         </div>
 
-        <aside class="kiosk-side">
-          <div class="card clock-card">
-            <div id="clockTime" class="clock-time">--:--:--</div>
-            <div id="clockDate" class="clock-date">—</div>
-          </div>
-          <div class="card" id="dailyCard" style="display:none">
-            <h3 id="dailyTitle">Ponto de hoje</h3>
-            <div class="table-wrap"><table><thead><tr><th>#</th><th>Tipo</th><th>Hora</th></tr></thead><tbody id="dailyBody"></tbody></table></div>
-          </div>
-          <div class="card">
-            <h3>Últimas marcações</h3>
-            <ul id="recentPunches" class="recent-list"><li class="empty">Nenhuma marcação hoje.</li></ul>
-          </div>
-          <div class="card kiosk-tips">
-            <h3>Como marcar</h3>
-            <p>Clique em <b>Registrar Ponto</b> e olhe para a câmera. O sistema reconhece você pelo rosto e registra o horário. Intervalo mínimo de 5 minutos entre marcações.</p>
-          </div>
-        </aside>
+        <div class="card" id="dailyCard" style="display:none">
+          <h3 id="dailyTitle">Ponto de hoje</h3>
+          <div class="table-wrap"><table><thead><tr><th>#</th><th>Tipo</th><th>Hora</th></tr></thead><tbody id="dailyBody"></tbody></table></div>
+        </div>
       </div>
     </section>
 
@@ -382,8 +399,7 @@ tr:last-child td { border-bottom: 0; }
         <button class="tab" data-tab="employees">Colaboradores</button>
         <button class="tab" data-tab="schedule">Escala / Folgas</button>
         <button class="tab" data-tab="punches">Marcações</button>
-        <button class="tab" data-tab="justifs">Justificativas</button>
-        <button class="tab" data-tab="atestados">Atestados</button>
+        <button class="tab" data-tab="justifs">Justif./Atestados</button>
         <button class="tab" data-tab="discipline">Disciplina</button>
         <button class="tab" data-tab="folha">Folha de Ponto</button>
         <button class="tab" data-tab="reports">Relatórios</button>
@@ -397,7 +413,6 @@ tr:last-child td { border-bottom: 0; }
         <div id="tab-schedule" class="tabpanel"></div>
         <div id="tab-punches" class="tabpanel"></div>
         <div id="tab-justifs" class="tabpanel"></div>
-        <div id="tab-atestados" class="tabpanel"></div>
         <div id="tab-discipline" class="tabpanel"></div>
         <div id="tab-folha" class="tabpanel"></div>
         <div id="tab-reports" class="tabpanel"></div>
@@ -971,13 +986,17 @@ window.SHOPBOX_CONFIG = {
   "use strict";
 
   const DEFAULT_MODELS_URL = "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights";
-  const MATCH_THRESHOLD = 0.5; // distância euclidiana máxima para considerar "mesma pessoa"
+  const MATCH_THRESHOLD = 0.46;  // distância máxima p/ aceitar (mais rígido = menos erro de pessoa)
+  const MATCH_MARGIN = 0.06;     // diferença mínima p/ o 2º colocado (evita ambiguidade entre funcionários)
+  const MIN_DET_SCORE = 0.6;     // confiança mínima da detecção do rosto
 
   let _loaded = false;
   let _loadingPromise = null;
 
   const FACE = {
     threshold: MATCH_THRESHOLD,
+    margin: MATCH_MARGIN,
+    minDetScore: MIN_DET_SCORE,
     available() { return typeof global.faceapi !== "undefined"; },
 
     async load(modelsUrl) {
@@ -1008,26 +1027,36 @@ window.SHOPBOX_CONFIG = {
         .withFaceLandmarks()
         .withFaceDescriptor();
       if (!det) return null;
+      if (det.detection.score < this.minDetScore) return null; // rosto pouco nítido: ignora
       return { descriptor: Array.from(det.descriptor), box: det.detection.box, score: det.detection.score };
     },
 
-    // Compara descritor com a base de colaboradores.
-    // employees: [{id, nome, faceDescriptors:[[...],...]}]
-    // retorna {employee, distance} do melhor match dentro do threshold, ou null
+    // Compara descritor com a base de colaboradores (SEGURANÇA ALTA).
+    // Aceita só se: melhor distância <= threshold E o 2º colaborador mais próximo
+    // estiver a pelo menos `margin` de distância (evita confundir funcionários).
+    // Retorna {employee, distance, second, ambiguous} ou null.
     match(descriptor, employees) {
       const query = new Float32Array(descriptor);
-      let best = null;
+      // menor distância POR colaborador
+      const perEmp = [];
       for (const emp of employees) {
-        const samples = emp.faceDescriptors || [];
-        for (const s of samples) {
+        let md = Infinity;
+        for (const s of (emp.faceDescriptors || [])) {
           const d = faceapi.euclideanDistance(query, new Float32Array(s));
-          if (best === null || d < best.distance) {
-            best = { employee: emp, distance: d };
-          }
+          if (d < md) md = d;
         }
+        if (md < Infinity) perEmp.push({ employee: emp, distance: md });
       }
-      if (best && best.distance <= this.threshold) return best;
-      return null;
+      if (!perEmp.length) return null;
+      perEmp.sort((a, b) => a.distance - b.distance);
+      const best = perEmp[0];
+      const second = perEmp[1] || null;
+      if (best.distance > this.threshold) return null;
+      // ambíguo: 2º colaborador muito próximo do 1º -> recusa por segurança
+      if (second && (second.distance - best.distance) < this.margin) {
+        return { employee: best.employee, distance: best.distance, second: second.distance, ambiguous: true };
+      }
+      return { employee: best.employee, distance: best.distance, second: second ? second.distance : null, ambiguous: false };
     },
 
     // captura um frame do vídeo como dataURL (para foto da marcação)
@@ -1152,6 +1181,19 @@ window.SHOPBOX_CONFIG = {
     currentTab: "dashboard",
   };
 
+  let adminStore = ""; // filtro de loja no painel admin (vazio = todas)
+  function storeList() {
+    return Array.from(new Set(State.employees.map((e) => e.loja).filter(Boolean))).sort();
+  }
+  function storeFilterHtml(id) {
+    const opts = ['<option value="">Todas as lojas</option>']
+      .concat(storeList().map((s) => `<option value="${esc(s)}" ${s === adminStore ? "selected" : ""}>${esc(s)}</option>`));
+    return `<select id="${id}" class="store-select">${opts.join("")}</select>`;
+  }
+  function empsByStore() {
+    return adminStore ? State.employees.filter((e) => (e.loja || "") === adminStore) : State.employees;
+  }
+
   // Determina papel do usuário logado (nuvem). Retorna false se não for admin.
   async function resolveRole() {
     if (!window.DB.isCloud) { State.isSuper = true; State.isAdminUser = true; return true; }
@@ -1246,7 +1288,7 @@ window.SHOPBOX_CONFIG = {
     $("#tab-" + tab).classList.add("active");
     const fn = {
       dashboard: renderDashboard, employees: renderEmployees, schedule: renderSchedule,
-      punches: renderPunches, justifs: renderJustifs, atestados: renderAtestados,
+      punches: renderPunches, justifs: renderJustifs,
       discipline: renderDiscipline, folha: renderFolha, reports: renderReports,
       settings: renderSettings, admins: renderAdmins,
     }[tab];
@@ -1256,59 +1298,44 @@ window.SHOPBOX_CONFIG = {
   // ============================================================
   //  KIOSK - Marcação por reconhecimento facial
   // ============================================================
-  let kioskTimer = null, clockTimer = null, kioskActive = false;
+  let clockTimer = null, kioskActive = false;
   const PUNCH_COOLDOWN_MS = 5 * 60 * 1000; // 5 min entre marcações do mesmo colaborador
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-  async function startKiosk() {
+  function startKiosk() {
     startClock();
     renderRecent();
-    const btn = $("#btnPunch");
-    if (btn) btn.onclick = handlePunchClick;
-    if (kioskActive) return;
     kioskActive = true;
-    const video = $("#kioskVideo");
-    const status = $("#kioskStatus");
-    try {
-      await startStream("kiosk", video);
-    } catch (e) {
-      $("#camPlaceholder").innerHTML = "<p>❌ Não foi possível acessar a câmera.<br>Permita o acesso à câmera e use o sistema via HTTPS.</p>";
-      kioskActive = false;
-      return;
+    const btn = $("#btnPunch");
+    if (btn) {
+      btn.onclick = punchFlow;
+      if (window.DB.isCloud && !State.hasSession) {
+        btn.disabled = true;
+        showStatus("err", "Dispositivo não ativado — entre em Administração e faça login.");
+      } else {
+        btn.disabled = false;
+        hideStatus();
+      }
     }
-    setStatus("scan", "Carregando reconhecimento facial…");
-    try {
-      await FACE.load(State.settings.modelsUrl);
-    } catch (e) {
-      $("#camPlaceholder").classList.remove("hidden");
-      $("#camPlaceholder").innerHTML = "<p>❌ Modelos de reconhecimento não carregaram.<br>Verifique a internet (CDN) ou configure os modelos locais.</p>";
-      setStatus("err", "Reconhecimento indisponível");
-      return;
-    }
-    $("#camPlaceholder").classList.add("hidden");
-    const kbtn = $("#btnPunch");
-    if (window.DB.isCloud && !State.hasSession) {
-      setStatus("err", "Dispositivo não ativado — entre em Administração e faça login.");
-      if (kbtn) kbtn.disabled = true;
-      return;
-    }
-    if (kbtn) kbtn.disabled = false;
-    setStatus("idle", "Clique em “Registrar Ponto” e olhe para a câmera");
+    hideCam();
+    hideDaily();
   }
 
   function stopKiosk() {
     kioskActive = false;
-    if (kioskTimer) clearInterval(kioskTimer);
     if (clockTimer) clearInterval(clockTimer);
-    kioskTimer = clockTimer = null;
+    clockTimer = null;
     stopStream("kiosk");
+    hideCam();
   }
 
-  function setStatus(cls, text) {
-    const s = $("#kioskStatus");
-    s.className = "kiosk-status " + cls;
-    s.textContent = text;
+  function showStatus(cls, text) {
+    const s = $("#kioskStatus"); if (!s) return;
+    s.style.display = ""; s.className = "kiosk-status " + cls; s.textContent = text;
   }
-
+  function hideStatus() { const s = $("#kioskStatus"); if (s) s.style.display = "none"; }
+  function showCam() { const p = $("#camPanel"); if (p) p.style.display = ""; }
+  function hideCam() { const p = $("#camPanel"); if (p) p.style.display = "none"; }
   function hideDaily() { const c = $("#dailyCard"); if (c) c.style.display = "none"; }
   function showDaily(emp, punches) {
     const card = $("#dailyCard"); if (!card) return;
@@ -1321,27 +1348,46 @@ window.SHOPBOX_CONFIG = {
   }
 
   let punchBusy = false;
-  async function handlePunchClick() {
+  async function punchFlow() {
     if (punchBusy) return;
-    if (window.DB.isCloud && !State.hasSession) { setStatus("err", "Dispositivo não ativado — faça login em Administração."); return; }
-    const video = $("#kioskVideo");
-    if (!video || !video.videoWidth) { setStatus("err", "Câmera indisponível."); return; }
-    if (!FACE.isLoaded()) {
-      setStatus("scan", "Carregando reconhecimento…");
-      try { await FACE.load(State.settings.modelsUrl); } catch (e) { setStatus("err", "Reconhecimento indisponível."); return; }
-    }
+    if (window.DB.isCloud && !State.hasSession) { showStatus("err", "Dispositivo não ativado — faça login em Administração."); return; }
     const store = getKioskStore();
     const withFaces = State.employees.filter((e) => e.ativo !== false && (e.faceDescriptors || []).length && (!store || (e.loja || "") === store));
-    if (!withFaces.length) { setStatus("idle", "Nenhum colaborador com rosto cadastrado" + (store ? " nesta loja" : "") + "."); return; }
+    if (!withFaces.length) { showStatus("idle", "Nenhum colaborador com rosto cadastrado" + (store ? " nesta loja" : "") + "."); return; }
+
     punchBusy = true;
-    const btn = $("#btnPunch"); if (btn) btn.disabled = true;
-    setStatus("scan", "Reconhecendo rosto…");
+    const btn = $("#btnPunch"); if (btn) { btn.disabled = true; btn.classList.add("recording"); }
+    hideDaily();
+    showCam();
+    const video = $("#kioskVideo");
+    showStatus("scan", "Iniciando câmera…");
     try {
-      const det = await FACE.getDescriptor(video);
-      if (!det) { setStatus("err", "Nenhum rosto detectado. Tente novamente."); return; }
-      const m = FACE.match(det.descriptor, withFaces);
-      if (!m) { setStatus("err", "Rosto não reconhecido. Tente novamente."); hideDaily(); return; }
-      const emp = m.employee;
+      try { await startStream("kiosk", video); }
+      catch (e) { showStatus("err", "Não foi possível acessar a câmera. Permita o acesso e use HTTPS."); return; }
+      if (!FACE.isLoaded()) {
+        showStatus("scan", "Carregando reconhecimento…");
+        try { await FACE.load(State.settings.modelsUrl); }
+        catch (e) { showStatus("err", "Reconhecimento indisponível (verifique a internet)."); return; }
+      }
+      for (let i = 0; i < 20 && !video.videoWidth; i++) await sleep(150);
+      showStatus("scan", "Olhe para a câmera…");
+      let matched = null, ambiguousSeen = false;
+      for (let attempt = 0; attempt < 14 && punchBusy; attempt++) {
+        const det = await FACE.getDescriptor(video);
+        if (det) {
+          const m = FACE.match(det.descriptor, withFaces);
+          if (m && m.ambiguous) ambiguousSeen = true;
+          else if (m) { matched = { m, photo: FACE.snapshot(video, 240) }; break; }
+        }
+        await sleep(550);
+      }
+      if (!matched) {
+        showStatus("err", ambiguousSeen
+          ? "Não deu para confirmar com segurança. Tente novamente, sozinho e de frente para a câmera."
+          : "Rosto não reconhecido. Tente novamente.");
+        return;
+      }
+      const emp = matched.m.employee;
       const today = C.todayKey();
       const todays = (await DB.punchesByEmployee(emp.id)).filter((p) => p.dateKey === today)
         .sort((a, b) => new Date(a.ts) - new Date(b.ts));
@@ -1350,7 +1396,7 @@ window.SHOPBOX_CONFIG = {
         const diff = Date.now() - new Date(last.ts).getTime();
         if (diff < PUNCH_COOLDOWN_MS) {
           const restante = Math.max(1, Math.ceil((PUNCH_COOLDOWN_MS - diff) / 60000));
-          setStatus("err", `${emp.nome.split(" ")[0]}: aguarde ${restante} min para registrar novamente.`);
+          showStatus("err", `${emp.nome.split(" ")[0]}: aguarde ${restante} min para registrar novamente.`);
           showDaily(emp, todays);
           return;
         }
@@ -1358,25 +1404,34 @@ window.SHOPBOX_CONFIG = {
       const idx = todays.length;
       const labels = ["Entrada", "Saída p/ intervalo", "Retorno do intervalo", "Saída"];
       const type = labels[idx] || (idx % 2 === 0 ? "Entrada" : "Saída");
-      const photo = FACE.snapshot(video, 240);
       const punch = {
         id: uid(), employeeId: emp.id, ts: new Date().toISOString(), dateKey: today,
-        type, confidence: Number((1 - m.distance).toFixed(3)), photoDataUrl: photo, method: "facial",
+        type, confidence: Number((1 - matched.m.distance).toFixed(3)), photoDataUrl: matched.photo, method: "facial",
       };
-      await DB.savePunch(punch);
-      setStatus("ok", `✅ ${emp.nome.split(" ")[0]} — ${type} às ${fmtTime(punch.ts)}`);
+      try {
+        await DB.savePunch(punch);
+      } catch (e) {
+        const msg = (e && (e.message || e.hint || e.details)) || "";
+        if (/PONTO_COOLDOWN|cooldown|5 min/i.test(msg)) {
+          showStatus("err", `${emp.nome.split(" ")[0]}: marcação muito próxima da anterior (mínimo 5 min).`);
+          showDaily(emp, todays); return;
+        }
+        console.error(e); showStatus("err", "Erro ao registrar. Tente novamente."); return;
+      }
+      showStatus("ok", `✅ ${emp.nome.split(" ")[0]} — ${type} às ${fmtTime(punch.ts)}`);
       showDaily(emp, todays.concat(punch));
       renderRecent();
-    } catch (e) {
-      console.error(e);
-      setStatus("err", "Erro ao registrar. Tente novamente.");
     } finally {
       punchBusy = false;
-      const b = $("#btnPunch"); if (b) b.disabled = false;
+      stopStream("kiosk");
+      hideCam();
+      const b = $("#btnPunch"); if (b) { b.disabled = false; b.classList.remove("recording"); }
     }
   }
 
   async function renderRecent() {
+    const ul = $("#recentPunches");
+    if (!ul) return; // lista removida do novo layout do kiosk
     const today = C.todayKey();
     const store = getKioskStore();
     const all = [];
@@ -1386,7 +1441,6 @@ window.SHOPBOX_CONFIG = {
       ps.forEach((p) => all.push({ p, name: e.nome }));
     }
     all.sort((a, b) => new Date(b.p.ts) - new Date(a.p.ts));
-    const ul = $("#recentPunches");
     if (!all.length) { ul.innerHTML = '<li class="empty">Nenhuma marcação hoje.</li>'; return; }
     ul.innerHTML = all.slice(0, 20).map(({ p, name }) =>
       `<li><span class="rp-name">${esc(name.split(" ")[0])}</span>
@@ -1410,19 +1464,22 @@ window.SHOPBOX_CONFIG = {
   // ============================================================
   async function renderDashboard() {
     const today = C.todayKey();
+    const emps = empsByStore();
     let presentes = 0, marcacoesHoje = 0, pendentes = 0;
-    for (const e of State.employees) {
+    for (const e of emps) {
       const ps = (await DB.punchesByEmployee(e.id)).filter((p) => p.dateKey === today);
       marcacoesHoje += ps.length;
       if (ps.length && ps.length % 2 === 1) presentes += 1;
     }
+    const empIds = new Set(emps.map((e) => e.id));
     const js = await DB.allJustifications();
-    pendentes = js.filter((j) => j.status === "pendente").length;
+    pendentes = js.filter((j) => j.status === "pendente" && empIds.has(j.employeeId)).length;
 
     const el = $("#tab-dashboard");
     el.innerHTML = `
+      <div class="section-head"><h2 style="font-size:1.05rem;margin:0">Painel${adminStore ? " — " + esc(adminStore) : ""}</h2>${storeFilterHtml("dashStore")}</div>
       <div class="stat-grid">
-        <div class="stat"><div class="v">${State.employees.length}</div><div class="l">Colaboradores</div></div>
+        <div class="stat"><div class="v">${emps.length}</div><div class="l">Colaboradores</div></div>
         <div class="stat"><div class="v">${presentes}</div><div class="l">No trabalho agora</div></div>
         <div class="stat"><div class="v">${marcacoesHoje}</div><div class="l">Marcações hoje</div></div>
         <div class="stat"><div class="v">${pendentes}</div><div class="l">Justificativas pendentes</div></div>
@@ -1431,14 +1488,15 @@ window.SHOPBOX_CONFIG = {
         <h3>Situação de hoje — ${fmtDate(today)}</h3>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Colaborador</th><th>Entrada</th><th>Marcações</th><th>Status</th></tr></thead>
-            <tbody id="dashRows"><tr><td colspan="4" class="muted">Carregando…</td></tr></tbody>
+            <thead><tr><th>Colaborador</th><th>Loja</th><th>Entrada</th><th>Marcações</th><th>Status</th></tr></thead>
+            <tbody id="dashRows"><tr><td colspan="5" class="muted">Carregando…</td></tr></tbody>
           </table>
         </div>
       </div>`;
+    $("#dashStore").onchange = (ev) => { adminStore = ev.target.value; renderDashboard(); };
 
     const rows = [];
-    for (const e of State.employees) {
+    for (const e of emps) {
       const ps = (await DB.punchesByEmployee(e.id)).filter((p) => p.dateKey === today)
         .sort((a, b) => new Date(a.ts) - new Date(b.ts));
       const ov = (await DB.overridesByEmployee(e.id)).find((o) => o.dateKey === today);
@@ -1448,10 +1506,10 @@ window.SHOPBOX_CONFIG = {
       else if (ps.length === 0) status = '<span class="tag warn">Ausente</span>';
       else if (ps.length % 2 === 1) status = '<span class="tag ok">Presente</span>';
       else status = '<span class="tag muted">Encerrado</span>';
-      rows.push(`<tr><td>${esc(e.nome)}</td><td>${ps[0] ? fmtTime(ps[0].ts) : "—"}</td>
+      rows.push(`<tr><td>${esc(e.nome)}</td><td>${esc(e.loja || "—")}</td><td>${ps[0] ? fmtTime(ps[0].ts) : "—"}</td>
         <td>${ps.length}</td><td>${status}</td></tr>`);
     }
-    $("#dashRows").innerHTML = rows.join("") || '<tr><td colspan="4" class="muted">Sem colaboradores.</td></tr>';
+    $("#dashRows").innerHTML = rows.join("") || '<tr><td colspan="5" class="muted">Sem colaboradores nesta loja.</td></tr>';
   }
 
   // ============================================================
@@ -1462,11 +1520,12 @@ window.SHOPBOX_CONFIG = {
     el.innerHTML = `
       <div class="section-head">
         <h2>Colaboradores</h2>
-        <button class="btn primary" id="btnNewEmp">+ Novo colaborador</button>
+        <div class="row" style="margin:0;align-items:center;gap:10px">${storeFilterHtml("empStore")}<button class="btn primary" id="btnNewEmp">+ Novo colaborador</button></div>
       </div>
       <div class="emp-grid">
-        ${State.employees.map(empCard).join("") || '<p class="muted">Nenhum colaborador cadastrado.</p>'}
+        ${empsByStore().map(empCard).join("") || '<p class="muted">Nenhum colaborador nesta loja.</p>'}
       </div>`;
+    $("#empStore").onchange = (ev) => { adminStore = ev.target.value; renderEmployees(); };
     $("#btnNewEmp").onclick = () => empModal(null);
     $$(".js-edit", el).forEach((b) => (b.onclick = () => empModal(b.dataset.id)));
     $$(".js-face", el).forEach((b) => (b.onclick = () => faceModal(b.dataset.id)));
@@ -1840,11 +1899,11 @@ window.SHOPBOX_CONFIG = {
             <td>${i + 1}</td><td>${esc(p.type)}</td><td>${fmtTime(p.ts)}</td>
             <td>${p.photoDataUrl ? `<img src="${p.photoDataUrl}" style="width:36px;height:36px;border-radius:6px;object-fit:cover">` : "—"}</td>
             <td>${p.confidence != null ? Math.round(p.confidence * 100) + "%" : (p.method === "manual" ? "manual" : "—")}</td>
-            <td><button class="btn sm danger js-pdel" data-id="${p.id}">×</button></td></tr>`).join("")
+            <td>${State.isSuper ? `<button class="btn sm danger js-pdel" data-id="${p.id}">×</button>` : '<span class="muted" title="Somente super admin">🔒</span>'}</td></tr>`).join("")
             || '<tr><td colspan="6" class="muted">Sem marcações neste dia.</td></tr>'}</tbody></table>
         </div>
         ${day.obs.length ? `<p class="mt">${day.obs.map((o) => `<span class="tag warn">${esc(o)}</span>`).join(" ")}</p>` : ""}
-        <div class="card mt" style="background:#f8fafc">
+        ${State.isSuper ? `<div class="card mt" style="background:#f8fafc">
           <h3>Lançar marcação manual</h3>
           <div class="row">
             <div class="field"><label>Hora</label><input type="time" id="pm_time"></div>
@@ -1852,21 +1911,32 @@ window.SHOPBOX_CONFIG = {
               <option>Entrada</option><option>Saída p/ intervalo</option><option>Retorno do intervalo</option><option>Saída</option></select></div>
             <div class="field" style="display:flex;align-items:flex-end"><button class="btn accent" id="pm_add">Adicionar</button></div>
           </div>
-          <p class="hint">Use para corrigir esquecimentos. Fica registrado como lançamento manual do ADM.</p>
-        </div>
+          <p class="hint">Correção manual (registra na auditoria). Sujeita à regra de 5 minutos entre marcações.</p>
+        </div>` : `<p class="hint mt">🔒 A edição de marcações é restrita ao super administrador (proteção contra alterações).</p>`}
       </div>`;
 
     $$(".js-pdel").forEach((b) => (b.onclick = async () => {
-      if (!confirm("Excluir esta marcação?")) return;
+      if (!State.isSuper) return;
+      if (!confirm("Excluir esta marcação? (ficará registrado na auditoria)")) return;
+      const p = ps.find((x) => x.id === b.dataset.id);
       await DB.deletePunch(b.dataset.id);
+      if (window.DB.logAudit) await window.DB.logAudit({ id: uid(), employeeId: id, ts: new Date().toISOString(), adminEmail: State.userEmail || "ADM", action: "marcacao", detail: `Excluiu marcação ${p ? p.type + " " + fmtTime(p.ts) : ""} de ${fmtDate(dateKey)}` });
       renderPunchesFor(id, dateKey);
     }));
-    $("#pm_add").onclick = async () => {
+    const pmAdd = $("#pm_add");
+    if (pmAdd) pmAdd.onclick = async () => {
       const t = $("#pm_time").value;
       if (!t) return toast("Informe a hora", "err");
       const [h, m] = t.split(":").map(Number);
       const d = C.parseKey(dateKey); d.setHours(h, m, 0, 0);
-      await DB.savePunch({ id: uid(), employeeId: id, ts: d.toISOString(), dateKey, type: $("#pm_type").value, method: "manual", confidence: null, photoDataUrl: null });
+      try {
+        await DB.savePunch({ id: uid(), employeeId: id, ts: d.toISOString(), dateKey, type: $("#pm_type").value, method: "manual", confidence: null, photoDataUrl: null });
+      } catch (e) {
+        const msg = (e && (e.message || e.hint)) || "";
+        if (/PONTO_COOLDOWN|5 min/i.test(msg)) return toast("Bloqueado: há uma marcação a menos de 5 min desse horário.", "err");
+        return toast("Erro ao lançar marcação.", "err");
+      }
+      if (window.DB.logAudit) await window.DB.logAudit({ id: uid(), employeeId: id, ts: new Date().toISOString(), adminEmail: State.userEmail || "ADM", action: "marcacao", detail: `Lançou marcação manual ${$("#pm_type").value} ${t} em ${fmtDate(dateKey)}` });
       renderPunchesFor(id, dateKey);
       toast("Marcação lançada", "ok");
     };
@@ -1878,13 +1948,24 @@ window.SHOPBOX_CONFIG = {
   async function renderJustifs() {
     const el = $("#tab-justifs");
     el.innerHTML = `
-      <div class="section-head"><h2>Justificativas de atraso / falta</h2>
-        <button class="btn primary" id="btnNewJust">+ Nova justificativa</button></div>
-      <div class="table-wrap"><table>
-        <thead><tr><th>Colaborador</th><th>Data</th><th>Tipo</th><th>Motivo</th><th>Anexo</th><th>Status</th><th></th></tr></thead>
-        <tbody id="justRows"></tbody></table></div>`;
+      <div class="card">
+        <div class="section-head" style="margin-bottom:10px"><h2>Justificativas</h2>
+          <button class="btn primary" id="btnNewJust">+ Nova justificativa</button></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Colaborador</th><th>Data</th><th>Tipo</th><th>Motivo</th><th>Anexo</th><th>Status</th><th></th></tr></thead>
+          <tbody id="justRows"></tbody></table></div>
+      </div>
+      <div class="card mt">
+        <div class="section-head" style="margin-bottom:10px"><h2>Atestados médicos</h2>
+          <button class="btn primary" id="btnNewAt">+ Anexar atestado</button></div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Colaborador</th><th>Período</th><th>Arquivo</th><th>Observação</th><th></th></tr></thead>
+          <tbody id="atRows"></tbody></table></div>
+      </div>`;
     $("#btnNewJust").onclick = () => justModal();
+    $("#btnNewAt").onclick = () => atestadoModal();
     await fillJustRows();
+    await fillAtestadoRows();
   }
 
   async function fillJustRows() {
@@ -1924,7 +2005,7 @@ window.SHOPBOX_CONFIG = {
       <div class="field"><label>Colaborador</label><select id="j_emp">${State.employees.map((e) => `<option value="${e.id}">${esc(e.nome)}</option>`).join("")}</select></div>
       <div class="row">
         <div class="field"><label>Data</label><input type="date" id="j_date" value="${C.todayKey()}"></div>
-        <div class="field"><label>Tipo</label><select id="j_kind"><option value="atraso">Atraso</option><option value="falta">Falta</option><option value="saida">Saída antecipada</option></select></div>
+        <div class="field"><label>Tipo</label><select id="j_kind"><option value="falta">Falta</option><option value="saida">Saída antecipada</option></select></div>
         <div class="field"><label>Status</label><select id="j_status"><option value="aprovado">Aprovado</option><option value="pendente">Pendente</option></select></div>
       </div>
       <div class="field"><label>Motivo</label><textarea id="j_reason" rows="3"></textarea></div>
@@ -1998,7 +2079,7 @@ window.SHOPBOX_CONFIG = {
         startDate: $("#a_start").value, endDate: $("#a_end").value, note: $("#a_note").value.trim(),
         createdAt: new Date().toISOString(),
       });
-      closeModal(); renderAtestados(); toast("Atestado anexado", "ok");
+      closeModal(); renderJustifs(); toast("Atestado anexado", "ok");
     };
   }
 
@@ -2329,7 +2410,8 @@ window.SHOPBOX_CONFIG = {
             <option value="escala">Alteração de escala</option>
             <option value="mensal">Mensal geral (tudo)</option>
           </select>
-          <select id="rpEmp" style="max-width:210px"><option value="__all">Todos os colaboradores</option>${State.employees.map((e) => `<option value="${e.id}">${esc(e.nome)}</option>`).join("")}</select>
+          ${storeFilterHtml("rpStore")}
+          <select id="rpEmp" style="max-width:210px"><option value="__all">Todos os colaboradores</option>${empsByStore().map((e) => `<option value="${e.id}">${esc(e.nome)}</option>`).join("")}</select>
           <select id="rpMonth" style="max-width:140px">${C.MONTHS.map((m, i) => `<option value="${i}" ${i === now.getMonth() ? "selected" : ""}>${m}</option>`).join("")}</select>
           <input type="number" id="rpYear" value="${now.getFullYear()}" style="max-width:100px">
           <button class="btn primary" id="rpGen">Gerar</button>
@@ -2337,6 +2419,7 @@ window.SHOPBOX_CONFIG = {
           <button class="btn ghost" id="rpCsv">⬇ CSV</button>
         </div></div>
       <div id="rpBody"><p class="muted">Selecione o relatório e clique em Gerar.</p></div>`;
+    $("#rpStore").onchange = (ev) => { adminStore = ev.target.value; renderReports(); };
     $("#rpGen").onclick = genReport;
     $("#rpPrint").onclick = () => window.print();
     $("#rpCsv").onclick = () => { if (lastReport) downloadCSV(lastReport.name, lastReport.rows); else toast("Gere um relatório primeiro", "err"); };
@@ -2344,7 +2427,8 @@ window.SHOPBOX_CONFIG = {
 
   function reportEmps() {
     const emp = $("#rpEmp").value;
-    return emp === "__all" ? State.employees : State.employees.filter((x) => x.id === emp);
+    const base = empsByStore();
+    return emp === "__all" ? base : base.filter((x) => x.id === emp);
   }
   function monthPrefix() {
     const m = parseInt($("#rpMonth").value, 10) + 1;
