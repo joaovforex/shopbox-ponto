@@ -2221,7 +2221,7 @@ window.SHOPBOX_CONFIG = {
 
     return `<div class="fp-doc">
       <table class="fp-h"><tbody>
-        <tr><td><b>EMPRESA:</b> ${esc(c.name || "")}</td><td style="width:38%"><b>CNPJ:</b> ${esc(c.cnpj || "")} &nbsp; <b>IE:</b> ${esc(c.ie || "")}</td></tr>
+        <tr><td><b>EMPRESA:</b> ${esc(c.razaoSocial || c.name || "")}</td><td style="width:38%"><b>CNPJ:</b> ${esc(c.cnpj || "")} &nbsp; <b>IE:</b> ${esc(c.ie || "")}</td></tr>
         <tr><td colspan="2"><b>ENDEREÇO:</b> Nº: ${esc(c.numero || "")} &nbsp; BAIRRO: ${esc(c.bairro || "")} &nbsp; CEP: ${esc(c.cep || "")} &nbsp; CIDADE: ${esc(c.cidade || "")} &nbsp; UF: ${esc(c.uf || "")}</td></tr>
         <tr><td><b>FUNCIONÁRIO:</b> ${num} - ${esc(e.nome || "")}</td><td><b>CPF:</b> ${esc(e.cpf || "")} &nbsp;&nbsp; <b>ADMISSÃO:</b> ${adm}</td></tr>
         <tr><td><b>CARGO:</b> ${esc(e.cargo || "")}</td><td><b>SETOR:</b> ${esc(e.setor || e.loja || "")} &nbsp;&nbsp; <b>INTER:</b> FLEX</td></tr>
@@ -2300,7 +2300,10 @@ window.SHOPBOX_CONFIG = {
       <div class="card">
         <h2>Empresa</h2>
         <div class="row">
-          <div class="field" style="flex:2"><label>Nome / Razão social</label><input id="cfg_name" value="${esc(s.company.name || "")}"></div>
+          <div class="field"><label>Nome de exibição (marca)</label><input id="cfg_name" value="${esc(s.company.name || "")}"></div>
+          <div class="field" style="flex:2"><label>Razão Social (aparece na folha)</label><input id="cfg_razao" value="${esc(s.company.razaoSocial || "")}"></div>
+        </div>
+        <div class="row">
           <div class="field"><label>CNPJ</label><input id="cfg_cnpj" value="${esc(s.company.cnpj || "")}"></div>
           <div class="field"><label>Inscrição Estadual (IE)</label><input id="cfg_ie" value="${esc(s.company.ie || "")}"></div>
         </div>
@@ -2357,7 +2360,7 @@ window.SHOPBOX_CONFIG = {
         if (p1) { if (p1 !== p2) return toast("Senhas não conferem", "err"); await DB.setSetting("adminHash", await sha256(p1)); }
       }
       await DB.setSetting("company", {
-        name: $("#cfg_name").value.trim() || "ShopBox", cnpj: $("#cfg_cnpj").value.trim(),
+        name: $("#cfg_name").value.trim() || "ShopBox", razaoSocial: $("#cfg_razao").value.trim(), cnpj: $("#cfg_cnpj").value.trim(),
         ie: $("#cfg_ie").value.trim(), numero: $("#cfg_numero").value.trim(), bairro: $("#cfg_bairro").value.trim(),
         cep: $("#cfg_cep").value.trim(), cidade: $("#cfg_cidade").value.trim(), uf: $("#cfg_uf").value.trim(),
         logoDataUrl: newLogo,
