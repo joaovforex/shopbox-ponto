@@ -185,15 +185,24 @@ label { display: block; font-size: .82rem; color: var(--ink-soft); margin-bottom
 .row { display: flex; gap: 14px; flex-wrap: wrap; }
 .row > .field { flex: 1; min-width: 150px; }
 
-/* ---------------- Admin tabs ---------------- */
-.admin-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
-.tab {
-  border: 0; background: transparent; padding: 11px 14px; cursor: pointer;
-  font-size: .9rem; font-weight: 500; color: var(--ink-soft); border-bottom: 2px solid transparent; margin-bottom: -1px;
+/* ---------------- Admin sidebar (menu lateral) ---------------- */
+.admin-layout { display: flex; align-items: flex-start; gap: 22px; }
+.admin-tabs {
+  display: flex; flex-direction: column; align-items: stretch; gap: 3px;
+  width: 218px; flex: 0 0 218px; padding: 10px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: var(--shadow-sm); position: sticky; top: 84px;
 }
-.tab:hover { color: var(--ink); }
-.tab.active { color: var(--brand-strong); font-weight: 600; border-bottom-color: var(--brand); }
-.tab.logout { margin-left: auto; color: var(--danger); }
+.admin-body { flex: 1; min-width: 0; }
+.tab {
+  display: flex; align-items: center; gap: 10px; text-align: left;
+  border: 0; background: transparent; padding: 11px 13px; cursor: pointer; border-radius: 9px;
+  font-size: .9rem; font-weight: 500; color: var(--ink-soft); width: 100%;
+}
+.tab .tab-ic { font-size: .95rem; width: 20px; text-align: center; flex: 0 0 20px; }
+.tab:hover { color: var(--ink); background: #f0f2f5; }
+.tab.active { color: var(--brand-strong); font-weight: 600; background: var(--brand-weak); }
+.tab.logout { margin-top: 6px; border-top: 1px solid var(--line); border-radius: 0 0 9px 9px; color: var(--danger); }
 .tabpanel { display: none; }
 .tabpanel.active { display: block; }
 
@@ -288,18 +297,16 @@ tr:last-child td { border-bottom: 0; }
   .topnav .store-select { max-width: none; width: 100%; margin-bottom: 4px; }
   .nav-btn { text-align: left; }
 
-  /* Abas do admin viram menu hambúrguer (drawer vertical) */
+  /* Sidebar vira menu hambúrguer (drawer vertical) no mobile */
+  .admin-layout { flex-direction: column; gap: 0; }
   .tabs-hamb { display: inline-flex; margin-bottom: 14px; }
   .admin-tabs {
-    flex-direction: column; align-items: stretch; gap: 2px; border-bottom: 0;
+    width: 100%; flex: 0 0 auto; position: static; top: auto; padding: 6px;
     max-height: 0; overflow: hidden; transition: max-height .25s ease;
-    border: 1px solid var(--line); border-radius: 12px; margin-bottom: 0;
+    margin-bottom: 0; box-shadow: none;
   }
-  body.tabs-open .admin-tabs { max-height: 640px; margin-bottom: 18px; box-shadow: var(--shadow); }
-  .admin-tabs .tab { border-bottom: 1px solid var(--line); border-radius: 0; margin: 0; padding: 13px 16px; }
-  .admin-tabs .tab:last-child { border-bottom: 0; }
-  .admin-tabs .tab.active { border-bottom-color: var(--line); background: var(--brand-weak); }
-  .tab.logout { margin-left: 0; }
+  body.tabs-open .admin-tabs { max-height: 720px; margin-bottom: 18px; box-shadow: var(--shadow); }
+  .admin-body { width: 100%; }
 }
 @media (min-width: 821px) {
   .tabs-hamb { display: none !important; }
@@ -353,8 +360,9 @@ tr:last-child td { border-bottom: 0; }
 
         <p class="kiosk-howto" id="kioskHowto">
           Para bater o ponto, clique no botão abaixo e olhe para a câmera.
-          O sistema reconhece você pelo rosto e registra automaticamente.
-          Intervalo mínimo de 5 minutos entre marcações.
+          O sistema reconhece você pelo rosto e registra a marcação.
+          O comprovante aparece por 10 segundos e a tela libera para o próximo colaborador.
+          Intervalo mínimo de 5 minutos entre marcações da mesma pessoa.
         </p>
 
         <button id="btnPunch" class="btn-punch-circle">Registrar<br>Ponto</button>
@@ -392,19 +400,20 @@ tr:last-child td { border-bottom: 0; }
     <!-- ================= PAINEL ADM ================= -->
     <section id="view-admin" class="view">
       <button class="tabs-hamb" id="tabsHamb" aria-label="Abrir menu de seções">☰ Menu</button>
-      <div class="admin-tabs">
-        <button class="tab active" data-tab="dashboard">Painel</button>
-        <button class="tab" data-tab="employees">Colaboradores</button>
-        <button class="tab" data-tab="schedule">Escala / Folgas</button>
-        <button class="tab" data-tab="punches">Marcações</button>
-        <button class="tab" data-tab="justifs">Justif./Atestados</button>
-        <button class="tab" data-tab="discipline">Disciplina</button>
-        <button class="tab" data-tab="folha">Folha de Ponto</button>
-        <button class="tab" data-tab="reports">Relatórios</button>
-        <button class="tab" data-tab="admins" id="tabAdmins" style="display:none">Administradores</button>
-        <button class="tab" data-tab="settings">Configurações</button>
-        <button id="btnLogout" class="tab logout">Sair</button>
-      </div>
+      <div class="admin-layout">
+      <aside class="admin-tabs">
+        <button class="tab active" data-tab="dashboard"><span class="tab-ic">▦</span> Painel</button>
+        <button class="tab" data-tab="employees"><span class="tab-ic">👥</span> Colaboradores</button>
+        <button class="tab" data-tab="schedule"><span class="tab-ic">📅</span> Escala / Folgas</button>
+        <button class="tab" data-tab="punches"><span class="tab-ic">🕒</span> Marcações</button>
+        <button class="tab" data-tab="justifs"><span class="tab-ic">📎</span> Justif./Atestados</button>
+        <button class="tab" data-tab="discipline"><span class="tab-ic">⚠️</span> Disciplina</button>
+        <button class="tab" data-tab="folha"><span class="tab-ic">📄</span> Folha de Ponto</button>
+        <button class="tab" data-tab="reports"><span class="tab-ic">📊</span> Relatórios</button>
+        <button class="tab" data-tab="admins" id="tabAdmins" style="display:none"><span class="tab-ic">🔑</span> Administradores</button>
+        <button class="tab" data-tab="settings"><span class="tab-ic">⚙️</span> Configurações</button>
+        <button id="btnLogout" class="tab logout"><span class="tab-ic">↩</span> Sair</button>
+      </aside>
       <div class="admin-body">
         <div id="tab-dashboard" class="tabpanel active"></div>
         <div id="tab-employees" class="tabpanel"></div>
@@ -416,6 +425,7 @@ tr:last-child td { border-bottom: 0; }
         <div id="tab-reports" class="tabpanel"></div>
         <div id="tab-admins" class="tabpanel"></div>
         <div id="tab-settings" class="tabpanel"></div>
+      </div>
       </div>
     </section>
   </main>
@@ -1321,6 +1331,7 @@ window.SHOPBOX_CONFIG = {
 
   function stopKiosk() {
     kioskActive = false;
+    cancelReset();
     if (clockTimer) clearInterval(clockTimer);
     clockTimer = null;
     stopStream("kiosk");
@@ -1335,6 +1346,19 @@ window.SHOPBOX_CONFIG = {
   function showCam() { const p = $("#camPanel"); if (p) p.style.display = ""; }
   function hideCam() { const p = $("#camPanel"); if (p) p.style.display = "none"; }
   function hideDaily() { const c = $("#dailyCard"); if (c) c.style.display = "none"; }
+  let resetTimer = null;
+  function cancelReset() { if (resetTimer) { clearTimeout(resetTimer); resetTimer = null; } }
+  // Após uma marcação, mantém a tabela do ponto por 10s e depois limpa
+  // a tela para o próximo colaborador poder bater o ponto.
+  function scheduleReset(sec) {
+    cancelReset();
+    resetTimer = setTimeout(() => {
+      resetTimer = null;
+      if (!kioskActive || punchBusy) return;
+      hideDaily();
+      hideStatus();
+    }, (sec || 10) * 1000);
+  }
   function showDaily(emp, punches) {
     const card = $("#dailyCard"); if (!card) return;
     card.style.display = "";
@@ -1354,6 +1378,7 @@ window.SHOPBOX_CONFIG = {
     if (!withFaces.length) { showStatus("idle", "Nenhum colaborador com rosto cadastrado" + (store ? " nesta loja" : "") + "."); return; }
 
     punchBusy = true;
+    cancelReset();
     const btn = $("#btnPunch"); if (btn) { btn.disabled = true; btn.classList.add("recording"); }
     hideDaily();
     showCam();
@@ -1419,6 +1444,7 @@ window.SHOPBOX_CONFIG = {
       showStatus("ok", `✅ ${emp.nome.split(" ")[0]} — ${type} às ${fmtTime(punch.ts)}`);
       showDaily(emp, todays.concat(punch));
       renderRecent();
+      scheduleReset(10);
     } finally {
       punchBusy = false;
       stopStream("kiosk");
@@ -2222,8 +2248,8 @@ window.SHOPBOX_CONFIG = {
     return `<div class="fp-doc">
       <table class="fp-h"><tbody>
         <tr><td><b>EMPRESA:</b> ${esc(c.razaoSocial || c.name || "")}</td><td style="width:38%"><b>CNPJ:</b> ${esc(c.cnpj || "")} &nbsp; <b>IE:</b> ${esc(c.ie || "")}</td></tr>
-        <tr><td colspan="2"><b>ENDEREÇO:</b> Nº: ${esc(c.numero || "")} &nbsp; BAIRRO: ${esc(c.bairro || "")} &nbsp; CEP: ${esc(c.cep || "")} &nbsp; CIDADE: ${esc(c.cidade || "")} &nbsp; UF: ${esc(c.uf || "")}</td></tr>
-        <tr><td><b>FUNCIONÁRIO:</b> ${num} - ${esc(e.nome || "")}</td><td><b>CPF:</b> ${esc(e.cpf || "")} &nbsp;&nbsp; <b>ADMISSÃO:</b> ${adm}</td></tr>
+        <tr><td colspan="2"><b>ENDEREÇO:</b> ${esc(c.numero || "")} &nbsp; <b>BAIRRO:</b> ${esc(c.bairro || "")} &nbsp; <b>CEP:</b> ${esc(c.cep || "")} &nbsp; <b>CIDADE:</b> ${esc(c.cidade || "")} &nbsp; <b>UF:</b> ${esc(c.uf || "")}</td></tr>
+        <tr><td><b>FUNCIONÁRIO:</b> ${num} - ${esc(e.nome || "")}</td><td><b>ADMISSÃO:</b> ${adm}</td></tr>
         <tr><td><b>CARGO:</b> ${esc(e.cargo || "")}</td><td><b>SETOR:</b> ${esc(e.setor || e.loja || "")} &nbsp;&nbsp; <b>INTER:</b> FLEX</td></tr>
         <tr><td><b>PERÍODO:</b> DE ${start} ATÉ ${end}</td><td><b>DATA DE EMISSÃO:</b> ${emiss}</td></tr>
         <tr><td colspan="2"><b>OBSERVAÇÕES:</b></td></tr>
@@ -2253,9 +2279,6 @@ window.SHOPBOX_CONFIG = {
               ${totRow("ATRASOS", "", hm(atrasos))}
               ${totRow("FALTAS", "", hm(faltasMin))}
               ${totRow("DSR", "", "")}
-              ${totRow("ADICIONAL NOTURNO", "", "")}
-              ${totRow("SALDO BH PERÍODO", "", "")}
-              ${totRow("SALDO BH GERAL", "", "")}
             </table>
             <table class="fp-tot" style="width:170px;border:0;border-left:1px solid #000">
               <tr><td class="lbl">EXTRA 50%:</td><td class="fp-c">${hm(extra50)}</td></tr>
@@ -2268,8 +2291,6 @@ window.SHOPBOX_CONFIG = {
         </div>
         <div style="width:250px" class="fp-esc">
           <div style="padding:5px">
-            <div class="t">ESCALA PADRÃO CADASTRADA: FLEXÍVEL &nbsp; VIRADA: 00:00</div>
-            ${escLines}
             <div style="margin-top:26px">_____________&nbsp;&nbsp;___/___/___</div>
             <div><b>LOCAL E DATA</b></div>
             <div style="margin-top:22px">_______________________________</div>
