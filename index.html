@@ -461,8 +461,9 @@ tr:last-child td { border-bottom: 0; }
       tryLoad();
     })();
   </script>
-  <!-- Geração de PDF A4 (folha de ponto) -->
-  <script src="https://cdn.jsdelivr.net/npm/html2pdf.js@0.10.3/dist/html2pdf.bundle.min.js"></script>
+  <!-- Geração de PDF A4 (folha de ponto): jsPDF + html2canvas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- Supabase + backend em nuvem -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
@@ -2156,25 +2157,35 @@ window.SHOPBOX_CONFIG = {
     $("#foPrint").onclick = exportFolhaPdf;
   }
 
-  // Gera um PDF real em A4 exato (210 x 297 mm), independente do diálogo de impressão.
+  // Gera um PDF real em A4 (210 x 297 mm). Cada colaborador é capturado
+  // isoladamente e ENCAIXADO em UMA única página A4 (escala automática),
+  // garantindo 1 folha por colaborador, independente do diálogo de impressão.
   async function exportFolhaPdf() {
     const body = $("#foBody");
-    if (!body || !body.querySelector(".fp-doc")) { toast("Gere a folha primeiro (clique em Gerar)."); return; }
-    if (typeof html2pdf === "undefined") { window.print(); return; } // fallback
+    const docs = body ? Array.from(body.querySelectorAll(".fp-doc")) : [];
+    if (!docs.length) { toast("Gere a folha primeiro (clique em Gerar)."); return; }
+    const JS = window.jspdf && window.jspdf.jsPDF;
+    if (!JS || typeof html2canvas === "undefined") { window.print(); return; } // fallback
     const btn = $("#foPrint"); const prev = btn ? btn.textContent : "";
     if (btn) { btn.disabled = true; btn.textContent = "Gerando PDF…"; }
     const mesNome = C.MONTHS[parseInt($("#foMonth").value, 10)] || "";
     const ano = $("#foYear").value;
     document.body.classList.add("fp-exporting");
     try {
-      await html2pdf().set({
-        margin: 0,
-        filename: `folha-ponto-${mesNome}-${ano}.pdf`,
-        image: { type: "jpeg", quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"], after: ".fp-doc" },
-      }).from(body).save();
+      const pdf = new JS({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
+      const pageW = 210, pageH = 297, mm = 4; // margem externa mínima de segurança
+      const maxW = pageW - mm * 2, maxH = pageH - mm * 2;
+      for (let i = 0; i < docs.length; i++) {
+        const canvas = await html2canvas(docs[i], { scale: 2, backgroundColor: "#ffffff", useCORS: true });
+        const ratio = canvas.width / canvas.height;
+        // encaixa dentro da área útil da A4 preservando a proporção
+        let w = maxW, h = w / ratio;
+        if (h > maxH) { h = maxH; w = h * ratio; }
+        const x = (pageW - w) / 2, y = mm; // topo, centralizado na largura
+        if (i > 0) pdf.addPage();
+        pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", x, y, w, h);
+      }
+      pdf.save(`folha-ponto-${mesNome}-${ano}.pdf`);
     } catch (e) {
       console.error(e); window.print(); // fallback se algo falhar
     } finally {
@@ -2209,16 +2220,9 @@ window.SHOPBOX_CONFIG = {
     .fp-esc{font-size:10.5px}
     .fp-esc .t{font-weight:bold;border-bottom:1px solid #000;padding-bottom:3px;margin-bottom:4px}
     .fp-foot{font-size:9px;padding:4px 6px;border-top:1px solid #000}
-    /* Modo de exportação p/ PDF A4 (210x297mm) — usado pelo html2pdf */
-    body.fp-exporting .fp-doc{ width:210mm !important; min-height:0 !important; margin:0 !important; border:0 !important; box-shadow:none !important; padding:8mm !important; font-size:8.5px !important }
-    body.fp-exporting .fp-doc td,body.fp-exporting .fp-doc th{ padding:0.5px 4px !important }
-    body.fp-exporting .fp-h td{ padding:1.5px 4px !important }
-    body.fp-exporting .fp-title{ font-size:11px !important; padding:3px !important }
-    body.fp-exporting .fp-main th,body.fp-exporting .fp-main td{ font-size:7.5px !important; padding:0.5px 3px !important }
-    body.fp-exporting .fp-tot td{ font-size:7px !important; padding:0.5px 4px !important }
-    body.fp-exporting .fp-tot .lbl{ font-size:7px !important }
-    body.fp-exporting .fp-esc{ font-size:7px !important }
-    body.fp-exporting .fp-foot{ font-size:7px !important; padding:1px 4px !important }
+    /* Modo de exportação p/ PDF A4 — cada folha é capturada isolada e
+       encaixada em UMA página A4 (escala automática no exportFolhaPdf). */
+    body.fp-exporting .fp-doc{ width:210mm !important; min-height:0 !important; margin:0 !important; border:0 !important; box-shadow:none !important; padding:8mm !important }
     @media print{
       @page{ size:A4 portrait; margin:8mm }
       html,body{ width:auto; margin:0; padding:0 }
