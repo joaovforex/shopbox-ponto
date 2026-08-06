@@ -2180,7 +2180,19 @@ window.SHOPBOX_CONFIG = {
     .fp-esc{font-size:10.5px}
     .fp-esc .t{font-weight:bold;border-bottom:1px solid #000;padding-bottom:3px;margin-bottom:4px}
     .fp-foot{font-size:9px;padding:4px 6px;border-top:1px solid #000}
-    @media print{ .fp-doc{border:1px solid #000;page-break-after:always;max-width:none} }
+    @media print{
+      @page{ size:A4 portrait; margin:6mm }
+      .fp-doc{ border:1px solid #000; page-break-after:always; page-break-inside:avoid; break-inside:avoid; max-width:none; margin:0; font-size:8.5px }
+      .fp-doc:last-child{ page-break-after:auto }
+      .fp-doc td,.fp-doc th{ padding:0.5px 4px }
+      .fp-h td{ padding:1.5px 4px }
+      .fp-title{ font-size:11px; padding:3px }
+      .fp-main th,.fp-main td{ font-size:8px; padding:0.5px 3px }
+      .fp-tot td{ padding:1.5px 4px }
+      .fp-esc{ font-size:8.5px }
+      .fp-foot{ font-size:8px; padding:2px 4px }
+      .fp-tot .spacer td{ height:8px !important }
+    }
   </style>`;
 
   async function folhaDoc(e, year, month, num) {
@@ -2247,7 +2259,7 @@ window.SHOPBOX_CONFIG = {
 
     return `<div class="fp-doc">
       <table class="fp-h"><tbody>
-        <tr><td><b>EMPRESA:</b> ${esc(c.razaoSocial || c.name || "")}</td><td style="width:38%"><b>CNPJ:</b> ${esc(c.cnpj || "")} &nbsp; <b>IE:</b> ${esc(c.ie || "")}</td></tr>
+        <tr><td><b>EMPRESA:</b> ${esc(c.razaoSocial || c.name || "")}</td><td style="width:40%;white-space:nowrap"><b>CNPJ:</b> ${esc(c.cnpj || "")} &nbsp; <b>IE:</b> ${esc(c.ie || "")}</td></tr>
         <tr><td colspan="2"><b>ENDEREÇO:</b> ${esc(c.numero || "")} &nbsp; <b>BAIRRO:</b> ${esc(c.bairro || "")} &nbsp; <b>CEP:</b> ${esc(c.cep || "")} &nbsp; <b>CIDADE:</b> ${esc(c.cidade || "")} &nbsp; <b>UF:</b> ${esc(c.uf || "")}</td></tr>
         <tr><td><b>FUNCIONÁRIO:</b> ${num} - ${esc(e.nome || "")}</td><td><b>ADMISSÃO:</b> ${adm}</td></tr>
         <tr><td><b>CARGO:</b> ${esc(e.cargo || "")}</td><td><b>SETOR:</b> ${esc(e.setor || e.loja || "")} &nbsp;&nbsp; <b>INTER:</b> FLEX</td></tr>
@@ -2283,9 +2295,9 @@ window.SHOPBOX_CONFIG = {
             <table class="fp-tot" style="width:170px;border:0;border-left:1px solid #000">
               <tr><td class="lbl">EXTRA 50%:</td><td class="fp-c">${hm(extra50)}</td></tr>
               <tr><td class="lbl">EXTRA 100%:</td><td class="fp-c">${hm(extra100)}</td></tr>
-              <tr><td style="height:22px"></td><td></td></tr>
-              <tr><td style="height:22px"></td><td></td></tr>
-              <tr><td style="height:22px"></td><td></td></tr>
+              <tr class="spacer"><td style="height:22px"></td><td></td></tr>
+              <tr class="spacer"><td style="height:22px"></td><td></td></tr>
+              <tr class="spacer"><td style="height:22px"></td><td></td></tr>
             </table>
           </div>
         </div>
