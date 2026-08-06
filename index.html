@@ -2187,11 +2187,13 @@ window.SHOPBOX_CONFIG = {
       .fp-doc td,.fp-doc th{ padding:0.5px 4px }
       .fp-h td{ padding:1.5px 4px }
       .fp-title{ font-size:11px; padding:3px }
-      .fp-main th,.fp-main td{ font-size:8px; padding:0.5px 3px }
-      .fp-tot td{ padding:1.5px 4px }
-      .fp-esc{ font-size:8.5px }
-      .fp-foot{ font-size:8px; padding:2px 4px }
-      .fp-tot .spacer td{ height:8px !important }
+      .fp-main th,.fp-main td{ font-size:7.5px; padding:0.5px 3px }
+      .fp-tot td{ font-size:7px; padding:0.5px 4px }
+      .fp-tot .lbl{ font-size:7px }
+      .fp-esc{ font-size:7px }
+      .fp-esc div{ margin-top:6px !important }
+      .fp-foot{ font-size:7px; padding:1px 4px }
+      .fp-tot .spacer td{ height:4px !important }
     }
   </style>`;
 
@@ -2264,7 +2266,6 @@ window.SHOPBOX_CONFIG = {
         <tr><td><b>FUNCIONÁRIO:</b> ${num} - ${esc(e.nome || "")}</td><td><b>ADMISSÃO:</b> ${adm}</td></tr>
         <tr><td><b>CARGO:</b> ${esc(e.cargo || "")}</td><td><b>SETOR:</b> ${esc(e.setor || e.loja || "")} &nbsp;&nbsp; <b>INTER:</b> FLEX</td></tr>
         <tr><td><b>PERÍODO:</b> DE ${start} ATÉ ${end}</td><td><b>DATA DE EMISSÃO:</b> ${emiss}</td></tr>
-        <tr><td colspan="2"><b>OBSERVAÇÕES:</b></td></tr>
       </tbody></table>
 
       <div class="fp-title">FOLHA DE PONTO DE ${start} ATÉ ${end}</div>
