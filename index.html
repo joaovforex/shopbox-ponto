@@ -997,6 +997,14 @@ window.SHOPBOX_CONFIG = {
   "use strict";
 
   const DEFAULT_MODELS_URL = "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights";
+  // CDNs alternativos (mesmos arquivos de peso). Se um travar/falhar, tenta o próximo.
+  const MODEL_URLS = [
+    DEFAULT_MODELS_URL,
+    "https://cdn.statically.io/gh/justadudewhohacks/face-api.js/master/weights",
+    "https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights",
+    "https://unpkg.com/face-api.js@0.22.2/weights",
+  ];
+  const LOAD_TIMEOUT_MS = 20000; // não deixa "carregando" para sempre
   const MATCH_THRESHOLD = 0.46;  // distância máxima p/ aceitar (mais rígido = menos erro de pessoa)
   const MATCH_MARGIN = 0.06;     // diferença mínima p/ o 2º colocado (evita ambiguidade entre funcionários)
   const MIN_DET_SCORE = 0.6;     // confiança mínima da detecção do rosto
@@ -1004,23 +1012,42 @@ window.SHOPBOX_CONFIG = {
   let _loaded = false;
   let _loadingPromise = null;
 
+  function withTimeout(promise, ms, label) {
+    return Promise.race([
+      promise,
+      new Promise((_, rej) => setTimeout(() => rej(new Error("tempo esgotado" + (label ? " (" + label + ")" : ""))), ms)),
+    ]);
+  }
+
   const FACE = {
     threshold: MATCH_THRESHOLD,
     margin: MATCH_MARGIN,
     minDetScore: MIN_DET_SCORE,
     available() { return typeof global.faceapi !== "undefined"; },
 
+    // Carrega os 3 modelos, com timeout por download e tentativa em vários CDNs.
+    // Em caso de falha total, libera _loadingPromise p/ permitir nova tentativa.
     async load(modelsUrl) {
       if (_loaded) return true;
       if (_loadingPromise) return _loadingPromise;
       if (!this.available()) throw new Error("Biblioteca face-api.js não carregou. Verifique a conexão / CDN.");
-      const url = modelsUrl || DEFAULT_MODELS_URL;
+      const urls = modelsUrl ? [modelsUrl].concat(MODEL_URLS.filter((u) => u !== modelsUrl)) : MODEL_URLS.slice();
       _loadingPromise = (async () => {
-        await faceapi.nets.tinyFaceDetector.loadFromUri(url);
-        await faceapi.nets.faceLandmark68Net.loadFromUri(url);
-        await faceapi.nets.faceRecognitionNet.loadFromUri(url);
-        _loaded = true;
-        return true;
+        let lastErr = null;
+        for (const url of urls) {
+          try {
+            await withTimeout(faceapi.nets.tinyFaceDetector.loadFromUri(url), LOAD_TIMEOUT_MS, "detector");
+            await withTimeout(faceapi.nets.faceLandmark68Net.loadFromUri(url), LOAD_TIMEOUT_MS, "landmarks");
+            await withTimeout(faceapi.nets.faceRecognitionNet.loadFromUri(url), LOAD_TIMEOUT_MS, "recognition");
+            _loaded = true;
+            return true;
+          } catch (e) {
+            lastErr = e;
+            try { console.warn("Falha ao carregar modelos de", url, "-", e && e.message); } catch (x) {}
+          }
+        }
+        _loadingPromise = null; // permite nova tentativa numa próxima chamada
+        throw lastErr || new Error("Não foi possível carregar os modelos de reconhecimento.");
       })();
       return _loadingPromise;
     },
@@ -1672,14 +1699,26 @@ window.SHOPBOX_CONFIG = {
     const photos = e.__samplePhotos ? e.__samplePhotos.slice() : [];
     renderSamples();
 
-    try { await startStream("capture", video); } catch { $("#capStatus").textContent = "❌ Câmera indisponível."; }
-    try { await FACE.load(State.settings.modelsUrl); $("#capStatus").textContent = "Pronto. Clique em capturar."; }
-    catch { $("#capStatus").textContent = "❌ Modelos não carregaram (verifique internet)."; }
+    const takeBtn = $("#cap_take"); if (takeBtn) takeBtn.disabled = true;
+    try { await startStream("capture", video); }
+    catch { $("#capStatus").textContent = "❌ Câmera indisponível. Permita o acesso à câmera e use HTTPS."; }
+    for (let i = 0; i < 20 && !video.videoWidth; i++) await sleep(150); // espera frames
+    $("#capStatus").textContent = "Carregando modelos de reconhecimento… (a 1ª vez pode demorar)";
+    try {
+      await FACE.load(State.settings.modelsUrl);
+      $("#capStatus").textContent = "Pronto. Clique em “Capturar amostra”.";
+      if (takeBtn) takeBtn.disabled = false;
+    } catch {
+      $("#capStatus").textContent = "❌ Não foi possível carregar os modelos. Verifique a internet e reabra esta janela.";
+    }
 
     $("#cap_take").onclick = async () => {
-      $("#capStatus").textContent = "Detectando rosto…";
-      const det = await FACE.getDescriptor(video);
-      if (!det) { $("#capStatus").textContent = "Nenhum rosto detectado. Tente novamente."; return; }
+      const btn = $("#cap_take"); if (btn) btn.disabled = true;
+      $("#capStatus").textContent = "Detectando rosto… olhe para a câmera.";
+      let det = null;
+      for (let i = 0; i < 8 && !det; i++) { det = await FACE.getDescriptor(video); if (!det) await sleep(300); }
+      if (btn) btn.disabled = false;
+      if (!det) { $("#capStatus").textContent = "Nenhum rosto detectado. Aproxime-se, melhore a iluminação e tente de novo."; return; }
       samples.push(det.descriptor);
       photos.push(FACE.snapshot(video, 120));
       renderSamples();
@@ -2854,6 +2893,15 @@ window.SHOPBOX_CONFIG = {
     bindEvents();
     initStoreSelector();
     showView("kiosk");
+    // Pré-carrega os modelos de reconhecimento em segundo plano, assim que a tela abre,
+    // para não travar "carregando" na hora de bater o ponto.
+    try {
+      if (window.FACE && FACE.available() && !FACE.isLoaded()) {
+        FACE.load(State.settings && State.settings.modelsUrl)
+          .then(() => console.log("Modelos de reconhecimento prontos"))
+          .catch((e) => console.warn("Pré-carregamento de modelos falhou (tentará ao marcar):", e && e.message));
+      }
+    } catch (e) {}
   }
 
   document.addEventListener("DOMContentLoaded", boot);
