@@ -1055,7 +1055,9 @@ window.SHOPBOX_CONFIG = {
     isLoaded() { return _loaded; },
 
     _options() {
-      return new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
+      // inputSize menor = muito mais rápido em tablets/hardware fraco.
+      // 224 mantém boa detecção para rosto próximo (uso de quiosque).
+      return new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
     },
 
     // Extrai UM descritor (Float32Array) do elemento de vídeo/imagem
@@ -1281,8 +1283,25 @@ window.SHOPBOX_CONFIG = {
   const streams = {}; // key -> MediaStream
   async function startStream(key, videoEl) {
     stopStream(key);
-    const s = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 }, audio: false });
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error("Este navegador não permite acesso à câmera. Use Chrome/Safari atualizado e HTTPS.");
+    }
+    // Vários tablets recusam constraints específicas. Tenta do mais rico ao mais simples.
+    const attempts = [
+      { video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } }, audio: false },
+      { video: { facingMode: "user" }, audio: false },
+      { video: true, audio: false },
+    ];
+    let s = null, lastErr = null;
+    for (const c of attempts) {
+      try { s = await navigator.mediaDevices.getUserMedia(c); break; }
+      catch (e) { lastErr = e; }
+    }
+    if (!s) throw lastErr || new Error("Câmera indisponível");
     streams[key] = s;
+    videoEl.setAttribute("playsinline", "");
+    videoEl.setAttribute("autoplay", "");
+    videoEl.muted = true;
     videoEl.srcObject = s;
     await videoEl.play().catch(() => {});
     return s;
@@ -1425,14 +1444,14 @@ window.SHOPBOX_CONFIG = {
       for (let i = 0; i < 20 && !video.videoWidth; i++) await sleep(150);
       showStatus("scan", "Olhe para a câmera…");
       let matched = null, ambiguousSeen = false;
-      for (let attempt = 0; attempt < 14 && punchBusy; attempt++) {
+      for (let attempt = 0; attempt < 24 && punchBusy; attempt++) {
         const det = await FACE.getDescriptor(video);
         if (det) {
           const m = FACE.match(det.descriptor, withFaces);
           if (m && m.ambiguous) ambiguousSeen = true;
           else if (m) { matched = { m, photo: FACE.snapshot(video, 240) }; break; }
         }
-        await sleep(550);
+        await sleep(300);
       }
       if (!matched) {
         showStatus("err", ambiguousSeen
