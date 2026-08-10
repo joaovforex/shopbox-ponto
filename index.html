@@ -1058,9 +1058,9 @@ window.SHOPBOX_CONFIG = {
     isLoaded() { return _loaded; },
 
     _options() {
-      // inputSize menor = muito mais rápido em tablets/hardware fraco.
-      // 224 mantém boa detecção para rosto próximo (uso de quiosque).
-      return new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 });
+      // inputSize 320 detecta bem rostos um pouco distantes (uso de quiosque).
+      // (224 era rápido, porém falhava em detectar rosto pequeno/afastado.)
+      return new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.4 });
     },
 
     // Extrai UM descritor (Float32Array) do elemento de vídeo/imagem
