@@ -1005,9 +1005,12 @@ window.SHOPBOX_CONFIG = {
     "https://unpkg.com/face-api.js@0.22.2/weights",
   ];
   const LOAD_TIMEOUT_MS = 20000; // não deixa "carregando" para sempre
-  const MATCH_THRESHOLD = 0.46;  // distância máxima p/ aceitar (mais rígido = menos erro de pessoa)
-  const MATCH_MARGIN = 0.06;     // diferença mínima p/ o 2º colocado (evita ambiguidade entre funcionários)
-  const MIN_DET_SCORE = 0.6;     // confiança mínima da detecção do rosto
+  // Limiares calibrados para funcionar entre dispositivos (cadastro x tablet).
+  // 0.46 era rígido demais: câmera de tablet gera imagem diferente e a distância
+  // ultrapassava o limite, rejeitando rostos legítimos. 0.55 é o equilíbrio usual.
+  const MATCH_THRESHOLD = 0.55;  // distância máxima p/ aceitar como a mesma pessoa
+  const MATCH_MARGIN = 0.06;     // 2º colocado precisa estar 0.06 mais longe (anti-troca de pessoa)
+  const MIN_DET_SCORE = 0.4;     // aceita detecções de câmeras mais fracas (tablet)
 
   let _loaded = false;
   let _loadingPromise = null;
