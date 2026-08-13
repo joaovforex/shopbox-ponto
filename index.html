@@ -406,7 +406,7 @@ tr:last-child td { border-bottom: 0; }
         <button class="tab" data-tab="employees"><span class="tab-ic">👥</span> Colaboradores</button>
         <button class="tab" data-tab="schedule"><span class="tab-ic">📅</span> Escala / Folgas</button>
         <button class="tab" data-tab="punches"><span class="tab-ic">🕒</span> Marcações</button>
-        <button class="tab" data-tab="justifs"><span class="tab-ic">📎</span> Justif./Atestados</button>
+        <button class="tab" data-tab="justifs"><span class="tab-ic">📎</span> Atestados</button>
         <button class="tab" data-tab="discipline"><span class="tab-ic">⚠️</span> Disciplina</button>
         <button class="tab" data-tab="folha"><span class="tab-ic">📄</span> Folha de Ponto</button>
         <button class="tab" data-tab="reports"><span class="tab-ic">📊</span> Relatórios</button>
@@ -1642,11 +1642,16 @@ window.SHOPBOX_CONFIG = {
         <div class="field"><label>Setor</label><input id="e_setor" value="${esc(e.setor || "")}"></div>
       </div>
       <div class="row">
-        <div class="field"><label>Salário mensal (R$) — opcional</label><input id="e_sal" type="number" step="0.01" value="${e.salario || ""}"></div>
+        <div class="field"><label>Valor por hora (R$) — base de cálculo</label><input id="e_vh" type="number" step="0.01" min="0" value="${e.valorHora != null ? e.valorHora : ""}" ${e.nr ? "disabled" : ""}></div>
         <div class="field"><label>Admissão</label><input id="e_adm" type="date" value="${e.admissao || ""}"></div>
         <div class="field"><label>Situação</label>
           <select id="e_ativo"><option value="true" ${e.ativo !== false ? "selected" : ""}>Ativo</option>
           <option value="false" ${e.ativo === false ? "selected" : ""}>Inativo</option></select></div>
+      </div>
+      <div class="row">
+        <div class="field" style="flex:2"><label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+          <input type="checkbox" id="e_nr" ${e.nr ? "checked" : ""} style="width:auto"> Não registrado (NR) — usa R$ 14,00/hora fixo
+        </label></div>
       </div>
       <div class="mt right">
         ${id ? '<button class="btn danger" id="e_del" style="float:left">Excluir</button>' : ""}
@@ -1655,14 +1660,21 @@ window.SHOPBOX_CONFIG = {
       </div>`);
 
     $("#e_cancel").onclick = closeModal;
+    // NR marca "não registrado" e fixa a taxa em R$ 14,00/h (desabilita o campo de valor)
+    const nrChk = $("#e_nr"), vhInp = $("#e_vh");
+    if (nrChk) nrChk.onchange = () => {
+      if (vhInp) { vhInp.disabled = nrChk.checked; if (nrChk.checked) vhInp.value = ""; }
+    };
     $("#e_save").onclick = async () => {
       const nome = $("#e_nome").value.trim();
       if (!nome) return toast("Informe o nome", "err");
+      const nr = !!(nrChk && nrChk.checked);
       const emp = Object.assign({}, e, {
         id: e.id || uid(),
         nome, matricula: $("#e_mat").value.trim(), cargo: $("#e_cargo").value.trim(),
         loja: $("#e_loja").value.trim(), cpf: $("#e_cpf").value.trim(), setor: $("#e_setor").value.trim(),
-        salario: parseFloat($("#e_sal").value) || 0,
+        nr,
+        valorHora: nr ? 14.00 : (parseFloat($("#e_vh").value) || 0),
         admissao: $("#e_adm").value, ativo: $("#e_ativo").value === "true",
         faceDescriptors: e.faceDescriptors || [], photoDataUrl: e.photoDataUrl || null,
         schedule: e.schedule || defaultSchedule(),
@@ -2042,22 +2054,13 @@ window.SHOPBOX_CONFIG = {
     const el = $("#tab-justifs");
     el.innerHTML = `
       <div class="card">
-        <div class="section-head" style="margin-bottom:10px"><h2>Justificativas</h2>
-          <button class="btn primary" id="btnNewJust">+ Nova justificativa</button></div>
-        <div class="table-wrap"><table>
-          <thead><tr><th>Colaborador</th><th>Data</th><th>Tipo</th><th>Motivo</th><th>Anexo</th><th>Status</th><th></th></tr></thead>
-          <tbody id="justRows"></tbody></table></div>
-      </div>
-      <div class="card mt">
         <div class="section-head" style="margin-bottom:10px"><h2>Atestados médicos</h2>
           <button class="btn primary" id="btnNewAt">+ Anexar atestado</button></div>
         <div class="table-wrap"><table>
           <thead><tr><th>Colaborador</th><th>Período</th><th>Arquivo</th><th>Observação</th><th></th></tr></thead>
           <tbody id="atRows"></tbody></table></div>
       </div>`;
-    $("#btnNewJust").onclick = () => justModal();
     $("#btnNewAt").onclick = () => atestadoModal();
-    await fillJustRows();
     await fillAtestadoRows();
   }
 
@@ -2310,8 +2313,15 @@ window.SHOPBOX_CONFIG = {
     const WD = ["DOM", "SEG", "TER", "QUA", "QUI", "SEX", "SÁB"];
     const hm = (n) => (n > 0 ? C.minToHM(n) : "");
     const cell = (v) => `<td class="fp-c">${v || ""}</td>`;
+    // Base de cálculo: valor por hora. NR (não registrado) = R$ 14,00/h fixo.
+    const rate = e.nr ? 14 : (Number(e.valorHora) || 0);
+    const brl = (v) => {
+      const p = (Number(v) || 0).toFixed(2).split(".");
+      return "R$ " + p[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".") + "," + p[1];
+    };
 
     let horasTrab = 0, faltasMin = 0, saidaAnt = 0, atrasos = 0, abonoMin = 0, extra50 = 0, extra100 = 0;
+    let totalValor = 0;
     let rows = "";
     for (const key of keys) {
       const d = C.parseKey(key);
@@ -2322,31 +2332,37 @@ window.SHOPBOX_CONFIG = {
       const worked = Math.round(C.workedFromPunches(ps).worked);
       const marksArr = ps.map((p) => fmtTime(p.ts));
       let trab = "", desc = "", abono = "", extras = "", marksTxt = "";
+      let valMin = null; // minutos pagáveis no dia; null => folga, exibe "(-)"
       const escala = ov && ov.type === "folga" ? "FOLGA" : ov && ov.type === "feriado" ? "FERIADO" : ov && ov.type === "abono" ? "ABONO" : "PADRÃO";
 
       if (exp.source === "abono") {
         const slot = C.scheduleSlot(e.schedule, key);
         const ab = slot && slot.work ? Math.max(0, C.hmToMin(slot.end) - C.hmToMin(slot.start) - (slot.breakMin || 0)) : 0;
-        abono = hm(ab); abonoMin += ab; marksTxt = "ABONO";
+        abono = hm(ab); abonoMin += ab; marksTxt = "ABONO"; valMin = ab;
       } else if (!exp.work) {
-        if (worked > 0) { extras = hm(worked); if (dow === 0) extra100 += worked; else extra100 += worked; marksTxt = marksArr.join("  "); }
+        if (worked > 0) { extras = hm(worked); extra100 += worked; marksTxt = marksArr.join("  "); valMin = worked; }
+        else { valMin = null; } // folga sem trabalho => "(-)"
       } else {
         const expMin = exp.expected;
         if (worked === 0) {
           desc = hm(expMin); faltasMin += expMin;
           marksTxt = marksArr.length ? marksArr.join("  ") + "  FALTA" : "FALTA  FALTA";
+          valMin = 0; // dia de trabalho sem marcação => R$ 0,00
         } else if (worked < expMin) {
           trab = hm(worked); desc = hm(expMin - worked); saidaAnt += (expMin - worked); horasTrab += worked;
-          marksTxt = marksArr.join("  ");
+          marksTxt = marksArr.join("  "); valMin = worked;
         } else {
           trab = hm(expMin); horasTrab += expMin;
           const sur = worked - expMin;
           if (sur > 0) { extras = hm(sur); if (dow === 0) extra100 += sur; else extra50 += sur; }
-          marksTxt = marksArr.join("  ");
+          marksTxt = marksArr.join("  "); valMin = worked;
         }
       }
+      const dayVal = valMin == null ? null : (valMin / 60) * rate;
+      if (dayVal != null) totalValor += dayVal;
+      const valCell = dayVal == null ? "(-)" : brl(dayVal);
       rows += `<tr><td class="fp-c">${WD[dow]} ${C.pad(d.getDate())}/${C.pad(month + 1)}</td>
-        <td>${esc(marksTxt)}</td>${cell(trab)}${cell(desc)}${cell(abono)}${cell(extras)}${cell("")}<td class="fp-c">${escala}</td></tr>`;
+        <td>${esc(marksTxt)}</td>${cell(trab)}${cell(desc)}${cell(abono)}${cell(extras)}<td class="fp-c">${valCell}</td><td class="fp-c">${escala}</td></tr>`;
     }
     const totalDesc = faltasMin + saidaAnt + atrasos;
 
@@ -2371,6 +2387,7 @@ window.SHOPBOX_CONFIG = {
         <tr><td><b>FUNCIONÁRIO:</b> ${num} - ${esc(e.nome || "")}</td><td><b>ADMISSÃO:</b> ${adm}</td></tr>
         <tr><td><b>CARGO:</b> ${esc(e.cargo || "")}</td><td><b>SETOR:</b> ${esc(e.setor || e.loja || "")} &nbsp;&nbsp; <b>INTER:</b> FLEX</td></tr>
         <tr><td><b>PERÍODO:</b> DE ${start} ATÉ ${end}</td><td><b>DATA DE EMISSÃO:</b> ${emiss}</td></tr>
+        <tr><td><b>VALOR/HORA:</b> ${brl(rate)}${e.nr ? " &nbsp;<b>(NR - não registrado)</b>" : ""}</td><td><b>TOTAL A PAGAR:</b> ${brl(totalValor)}</td></tr>
       </tbody></table>
 
       <div class="fp-title">FOLHA DE PONTO DE ${start} ATÉ ${end}</div>
@@ -2379,7 +2396,7 @@ window.SHOPBOX_CONFIG = {
         <thead><tr>
           <th style="width:78px">DATA</th><th>MARCAÇÕES</th>
           <th style="width:52px">TRAB.</th><th style="width:52px">DESC.</th><th style="width:52px">ABONO</th>
-          <th style="width:56px">EXTRAS</th><th style="width:46px">BH</th><th style="width:64px">ESCALA</th>
+          <th style="width:56px">EXTRAS</th><th style="width:72px">VALOR R$</th><th style="width:64px">ESCALA</th>
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
@@ -2397,6 +2414,7 @@ window.SHOPBOX_CONFIG = {
               ${totRow("ATRASOS", "", hm(atrasos))}
               ${totRow("FALTAS", "", hm(faltasMin))}
               ${totRow("DSR", "", "")}
+              <tr><td class="lbl" style="border-top:2px solid #000">TOTAL A PAGAR (R$)</td><td class="fp-c" colspan="2" style="border-top:2px solid #000;font-weight:bold">${brl(totalValor)}</td></tr>
             </table>
             <table class="fp-tot" style="width:170px;border:0;border-left:1px solid #000">
               <tr><td class="lbl">EXTRA 50%:</td><td class="fp-c">${hm(extra50)}</td></tr>
