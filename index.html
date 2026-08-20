@@ -185,6 +185,12 @@ label { display: block; font-size: .82rem; color: var(--ink-soft); margin-bottom
 .row { display: flex; gap: 14px; flex-wrap: wrap; }
 .row > .field { flex: 1; min-width: 150px; }
 
+/* ---------------- Modo dispositivo (somente reconhecimento) ---------------- */
+.device-logout { margin-top: 26px; background: transparent; border: 1px solid var(--line); color: var(--ink-soft); padding: 8px 14px; border-radius: 9px; cursor: pointer; font-size: .85rem; }
+.device-logout:hover { background: #f0f2f5; color: var(--ink); }
+body.device-only .nav-btn[data-view="admin"], body.device-only #hamburger, body.device-only .hamburger { display: none !important; }
+body.device-only .device-logout { display: inline-block !important; }
+
 /* ---------------- Admin sidebar (menu lateral) ---------------- */
 .admin-layout { display: flex; align-items: flex-start; gap: 22px; }
 .admin-tabs {
@@ -380,6 +386,7 @@ tr:last-child td { border-bottom: 0; }
           <h3 id="dailyTitle">Ponto de hoje</h3>
           <div class="table-wrap"><table><thead><tr><th>#</th><th>Tipo</th><th>Hora</th></tr></thead><tbody id="dailyBody"></tbody></table></div>
         </div>
+        <button id="deviceLogout" class="device-logout" style="display:none">⎋ Sair do dispositivo</button>
       </div>
     </section>
 
@@ -1337,9 +1344,17 @@ window.SHOPBOX_CONFIG = {
     hasSession: false,
     isSuper: false,
     isAdminUser: false,
+    deviceOnly: false,   // sessão de dispositivo: SÓ reconhecimento facial
+    deviceLoja: "",      // loja fixa do dispositivo
     userEmail: null,
     currentTab: "dashboard",
   };
+
+  // Lista de dispositivos (logins somente-reconhecimento). Fica em settings,
+  // separada de ponto_admins, para NUNCA herdar acesso de administrador.
+  async function getDevices() {
+    try { return (await DB.getSetting("devices", [])) || []; } catch (e) { return []; }
+  }
 
   let adminStore = ""; // filtro de loja no painel admin (vazio = todas)
   function storeList() {
@@ -1355,21 +1370,33 @@ window.SHOPBOX_CONFIG = {
   }
 
   // Determina papel do usuário logado (nuvem). Retorna false se não for admin.
+  // Retorna "admin" | "device" | null
   async function resolveRole() {
-    if (!window.DB.isCloud) { State.isSuper = true; State.isAdminUser = true; return true; }
+    if (!window.DB.isCloud) { State.isSuper = true; State.isAdminUser = true; State.deviceOnly = false; return "admin"; }
     try {
       State.userEmail = (await window.DB.currentEmail()) || "";
     } catch (e) { State.userEmail = ""; }
     State.isSuper = State.userEmail.toLowerCase() === SUPER_EMAIL.toLowerCase();
-    if (State.isSuper) { State.isAdminUser = true; return true; }
-    try { State.isAdminUser = await window.DB.isAdmin(State.userEmail); }
-    catch (e) { State.isAdminUser = false; }
-    return State.isAdminUser;
+    State.deviceOnly = false; State.deviceLoja = "";
+    if (State.isSuper) { State.isAdminUser = true; return "admin"; }
+    let admin = false;
+    try { admin = await window.DB.isAdmin(State.userEmail); } catch (e) { admin = false; }
+    if (admin) { State.isAdminUser = true; return "admin"; }
+    // Dispositivo de reconhecimento? (allowlist separada, sem poderes de admin)
+    const dev = (await getDevices()).find((d) => (d.email || "").toLowerCase() === State.userEmail.toLowerCase());
+    if (dev) { State.isAdminUser = false; State.deviceOnly = true; State.deviceLoja = dev.loja || ""; return "device"; }
+    State.isAdminUser = false; return null;
   }
 
   function applyRoleUI() {
     const t = document.getElementById("tabAdmins");
     if (t) t.style.display = State.isSuper ? "" : "none";
+    // Modo dispositivo: trava tudo, deixa só o quiosque de marcação.
+    document.body.classList.toggle("device-only", !!State.deviceOnly);
+    const admNav = document.querySelector('.nav-btn[data-view="admin"]');
+    if (admNav) admNav.style.display = State.deviceOnly ? "none" : "";
+    const hb = document.getElementById("hamburger");
+    if (hb) hb.style.display = State.deviceOnly ? "none" : "";
   }
 
   async function loadSettings() {
@@ -1437,6 +1464,8 @@ window.SHOPBOX_CONFIG = {
   //  NAVEGAÇÃO
   // ============================================================
   function showView(view) {
+    // Trava de segurança: dispositivo de reconhecimento nunca acessa o admin.
+    if (State.deviceOnly && view !== "kiosk") view = "kiosk";
     $$(".view").forEach((v) => v.classList.remove("active"));
     if (view === "kiosk") {
       $("#view-kiosk").classList.add("active");
@@ -2997,6 +3026,19 @@ window.SHOPBOX_CONFIG = {
       <div class="card mt">
         <h3>Administradores atuais</h3>
         <div class="table-wrap"><table><thead><tr><th>E-mail</th><th>Cargo</th><th></th></tr></thead><tbody id="ad_rows"></tbody></table></div>
+      </div>
+
+      <div class="card mt">
+        <h3>Logins de reconhecimento (dispositivos)</h3>
+        <p class="muted">Crie um login que serve <b>somente</b> para marcar ponto por reconhecimento facial. Não acessa o painel, relatórios, nem dados — apenas a tela de marcação, travada na loja escolhida.</p>
+        <div class="row">
+          <div class="field"><label>E-mail do dispositivo</label><input type="email" id="dv_email" placeholder="loja-atuba@dispositivo.com"></div>
+          <div class="field"><label>Senha</label><input type="password" id="dv_pass" placeholder="mínimo 6 caracteres"></div>
+          <div class="field"><label>Loja</label><input id="dv_loja" placeholder="ex.: ATUBA" list="dv_lojas"><datalist id="dv_lojas">${storeList().map((s) => `<option value="${esc(s)}">`).join("")}</datalist></div>
+          <div class="field" style="display:flex;align-items:flex-end"><button class="btn primary" id="dv_add">Criar dispositivo</button></div>
+        </div>
+        <p id="dv_msg" class="hint"></p>
+        <div class="table-wrap mt"><table><thead><tr><th>E-mail</th><th>Loja</th><th></th></tr></thead><tbody id="dv_rows"></tbody></table></div>
       </div>`;
 
     $("#ad_add").onclick = async () => {
@@ -3023,7 +3065,51 @@ window.SHOPBOX_CONFIG = {
         msg.textContent = "Erro: " + txt;
       }
     };
+
+    $("#dv_add").onclick = async () => {
+      const email = $("#dv_email").value.trim().toLowerCase();
+      const pass = $("#dv_pass").value;
+      const loja = $("#dv_loja").value.trim();
+      const msg = $("#dv_msg");
+      if (!email || !pass) { msg.textContent = "Informe e-mail e senha."; return; }
+      if (pass.length < 6) { msg.textContent = "A senha precisa ter ao menos 6 caracteres."; return; }
+      if (email.toLowerCase() === SUPER_EMAIL.toLowerCase()) { msg.textContent = "Este e-mail é do super admin."; return; }
+      msg.textContent = "Criando…";
+      const saveDev = async () => {
+        const list = (await getDevices()).filter((d) => (d.email || "").toLowerCase() !== email);
+        list.push({ email, loja });
+        await DB.setSetting("devices", list);
+      };
+      try {
+        await window.DB.createAuthUser(email, pass);
+        await saveDev();
+        msg.textContent = ""; $("#dv_email").value = ""; $("#dv_pass").value = ""; $("#dv_loja").value = "";
+        toast("Dispositivo criado", "ok"); fillDeviceRows();
+      } catch (e) {
+        const txt = (e && e.message) || "";
+        if (/registered|already/i.test(txt)) { await saveDev(); toast("Dispositivo vinculado (usuário já existia)", "ok"); $("#dv_email").value=""; $("#dv_pass").value=""; $("#dv_loja").value=""; msg.textContent=""; fillDeviceRows(); return; }
+        msg.textContent = "Erro: " + txt;
+      }
+    };
+
     fillAdminRows();
+    fillDeviceRows();
+  }
+
+  async function fillDeviceRows() {
+    const tbody = $("#dv_rows");
+    if (!tbody) return;
+    const list = await getDevices();
+    tbody.innerHTML = list.length
+      ? list.map((d) => `<tr><td>${esc(d.email)}</td><td>${esc(d.loja || "todas")}</td>
+          <td><button class="btn sm danger js-dv-del" data-email="${esc(d.email)}">Remover</button></td></tr>`).join("")
+      : '<tr><td colspan="3" class="muted">Nenhum dispositivo cadastrado.</td></tr>';
+    $$(".js-dv-del").forEach((b) => (b.onclick = async () => {
+      if (!confirm("Remover o login de dispositivo " + b.dataset.email + "? (o acesso de reconhecimento deixa de funcionar)")) return;
+      const list = (await getDevices()).filter((d) => (d.email || "").toLowerCase() !== b.dataset.email.toLowerCase());
+      await DB.setSetting("devices", list);
+      toast("Dispositivo removido"); fillDeviceRows();
+    }));
   }
 
   async function fillAdminRows() {
@@ -3054,18 +3140,29 @@ window.SHOPBOX_CONFIG = {
       try {
         await window.DB.signIn(email, pass);
         State.hasSession = true;
-        const ok = await resolveRole();
-        if (!ok) {
+        const role = await resolveRole();
+        if (!role) {
           try { await window.DB.signOut(); } catch (x) {}
           State.hasSession = false;
-          errEl.textContent = "Este usuário não tem permissão de administrador. Peça ao super admin para conceder acesso.";
+          errEl.textContent = "Este usuário não tem permissão. Peça ao super admin para conceder acesso de administrador ou cadastrar como dispositivo.";
           errEl.classList.remove("hidden");
+          return;
+        }
+        errEl.classList.add("hidden");
+        $("#adminPass").value = "";
+        if (role === "device") {
+          // Login SOMENTE de reconhecimento: trava total, vai direto ao quiosque.
+          State.isAdmin = false;
+          applyRoleUI();
+          await loadSettings(); await refreshEmployees();
+          if (State.deviceLoja) { try { localStorage.setItem("shopbox_kiosk_store", State.deviceLoja); } catch (x) {} }
+          initStoreSelector();
+          showView("kiosk");
+          toast("Dispositivo ativado — modo reconhecimento", "ok");
           return;
         }
         State.isAdmin = true;
         applyRoleUI();
-        errEl.classList.add("hidden");
-        $("#adminPass").value = "";
         await loadSettings(); await refreshEmployees(); initStoreSelector();
         showView("admin");
       } catch (e) {
@@ -3104,6 +3201,14 @@ window.SHOPBOX_CONFIG = {
       applyRoleUI();
       showView("kiosk");
     };
+    const dlo = $("#deviceLogout");
+    if (dlo) dlo.onclick = async () => {
+      if (!confirm("Sair do modo dispositivo? Será necessário o login do dispositivo para reativar.")) return;
+      State.isAdmin = false; State.isSuper = false; State.isAdminUser = false; State.deviceOnly = false; State.deviceLoja = ""; State.userEmail = null;
+      if (window.DB.isCloud) { State.hasSession = false; try { await window.DB.signOut(); } catch (e) {} }
+      applyRoleUI();
+      showView("kiosk");
+    };
     $("#modalClose").onclick = closeModal;
     $("#modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
   }
@@ -3120,6 +3225,9 @@ window.SHOPBOX_CONFIG = {
     sel.innerHTML = '<option value="">Todas as lojas</option>' +
       stores.map((s) => `<option value="${esc(s)}" ${s === cur ? "selected" : ""}>${esc(s)}</option>`).join("");
     sel.onchange = () => { try { localStorage.setItem("shopbox_kiosk_store", sel.value); } catch (e) {} renderRecent(); };
+    // No modo dispositivo, a loja é fixa (definida no cadastro do dispositivo).
+    if (State.deviceOnly) { if (State.deviceLoja) sel.value = State.deviceLoja; sel.disabled = true; }
+    else { sel.disabled = false; }
   }
 
   async function boot() {
@@ -3127,7 +3235,10 @@ window.SHOPBOX_CONFIG = {
       try {
         await window.DB.init();
         State.hasSession = await window.DB.hasSession();
-        if (State.hasSession) { await resolveRole(); applyRoleUI(); }
+        if (State.hasSession) {
+          await resolveRole(); applyRoleUI();
+          if (State.deviceOnly && State.deviceLoja) { try { localStorage.setItem("shopbox_kiosk_store", State.deviceLoja); } catch (x) {} }
+        }
       }
       catch (e) { console.error(e); alert("Erro ao conectar ao servidor. Confira o arquivo js/config.js (URL e chave do Supabase)."); }
     } else if (!("indexedDB" in window)) {
