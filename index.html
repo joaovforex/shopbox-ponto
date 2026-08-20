@@ -1170,6 +1170,125 @@ window.SHOPBOX_CONFIG = {
     return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
   }
 
+  // Carimba a marcação com NSR (Número Sequencial de Registro) e hash de integridade,
+  // conforme exigências da Portaria MTP 671/2021 (base para AFD e comprovante).
+  async function stampPunch(punch, emp) {
+    try {
+      const all = (window.DB.all ? await window.DB.all("punches") : []) || [];
+      punch.nsr = all.reduce((m, p) => Math.max(m, p.nsr || 0), 0) + 1;
+    } catch (e) { punch.nsr = Date.now() % 1000000000; }
+    const c = (State.settings && State.settings.company) || {};
+    const ident = (emp && (emp.cpf || emp.matricula || emp.id)) || punch.employeeId;
+    const rec = [punch.nsr, c.cnpj || "", ident, punch.ts, punch.type || ""].join("|");
+    try { punch.hash = await sha256(rec); } catch (e) { punch.hash = null; }
+    return punch;
+  }
+
+  // Comprovante de Registro de Ponto do Trabalhador (Portaria MTP 671/2021)
+  function comprovanteLines(emp, punch) {
+    const c = (State.settings && State.settings.company) || {};
+    const dt = new Date(punch.ts);
+    const data = `${C.pad(dt.getDate())}/${C.pad(dt.getMonth() + 1)}/${dt.getFullYear()}`;
+    const hora = `${C.pad(dt.getHours())}:${C.pad(dt.getMinutes())}:${C.pad(dt.getSeconds())}`;
+    const L = [];
+    L.push("COMPROVANTE DE REGISTRO DE PONTO DO TRABALHADOR");
+    L.push("");
+    L.push("Empregador: " + (c.razaoSocial || c.name || ""));
+    L.push((c.tipoId === "CPF" ? "CPF: " : "CNPJ: ") + (c.cnpj || ""));
+    if (c.caepf) L.push("CAEPF/CNO: " + c.caepf);
+    if (c.numero || c.cidade) L.push("Endereço: " + [c.numero, c.bairro, c.cidade, c.uf].filter(Boolean).join(", "));
+    L.push("");
+    L.push("Empregado: " + (emp.nome || ""));
+    L.push("CPF: " + (emp.cpf || "não informado"));
+    L.push("");
+    L.push("NSR: " + (punch.nsr != null ? String(punch.nsr).padStart(9, "0") : "—"));
+    L.push("Data: " + data + "   Hora: " + hora);
+    L.push("Marcação: " + (punch.type || ""));
+    if (c.idRep) L.push("Identificador do REP-P: " + c.idRep);
+    L.push("Integridade (SHA-256): " + (punch.hash || "—"));
+    return L;
+  }
+  function showComprovante(emp, punch) {
+    const lines = comprovanteLines(emp, punch);
+    openModal(`
+      <h2>Comprovante de marcação</h2>
+      <pre id="comprovPre" style="white-space:pre-wrap;font-family:'Courier New',monospace;font-size:12.5px;background:#fff;border:1px solid #000;padding:12px;border-radius:6px">${esc(lines.join("\n"))}</pre>
+      <p class="hint">Entregue/torne disponível ao trabalhador a cada marcação (Portaria 671). A assinatura digital ICP-Brasil (PAdES) é aplicada quando o certificado estiver configurado.</p>
+      <div class="mt right">
+        <button class="btn ghost" id="cmp_close">Fechar</button>
+        <button class="btn ghost" id="cmp_dl">Baixar (.txt)</button>
+        <button class="btn primary" id="cmp_print">Imprimir</button>
+      </div>`);
+    $("#cmp_close").onclick = closeModal;
+    $("#cmp_dl").onclick = () => downloadText(`comprovante-${punch.nsr || "ponto"}.txt`, lines.join("\r\n"));
+    $("#cmp_print").onclick = () => {
+      const w = window.open("", "_blank");
+      if (!w) return toast("Permita pop-ups para imprimir", "err");
+      w.document.write("<pre style='font-family:Courier New,monospace;font-size:13px'>" + esc(lines.join("\n")) + "</pre>");
+      w.document.close(); w.focus(); w.print();
+    };
+  }
+  function downloadText(filename, text) {
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = filename;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  }
+
+  // Data/hora ISO 8601 com fuso (-0300), formato usado pela Portaria 671.
+  function isoDT(d) {
+    const p = (x) => String(x).padStart(2, "0");
+    return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" +
+      p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds()) + "-0300";
+  }
+  async function coletaMarc(year, month) {
+    const keys = C.monthDays(year, month);
+    const ini = keys[0], fim = keys[keys.length - 1];
+    const emps = await DB.employees();
+    let marc = [];
+    for (const e of emps) {
+      const ps = await DB.punchesByEmployee(e.id);
+      for (const p of ps) if (p.dateKey >= ini && p.dateKey <= fim) marc.push({ e, p });
+    }
+    marc.sort((a, b) => new Date(a.p.ts) - new Date(b.p.ts));
+    return { marc, emps, ini, fim };
+  }
+  async function gerarCSVMarc(year, month) {
+    const { marc } = await coletaMarc(year, month);
+    const rows = [["NSR", "Colaborador", "CPF", "Loja", "DataHora", "Tipo", "Metodo", "Desconsiderada", "Hash"]];
+    marc.forEach(({ e, p }) => rows.push([
+      p.nsr || "", e.nome || "", e.cpf || "", e.loja || "", isoDT(new Date(p.ts)),
+      p.type || "", p.method || "", p.annulled ? ("SIM: " + (p.annulled.reason || "")) : "NAO", p.hash || "",
+    ]));
+    const csv = rows.map((r) => r.map((v) => { v = String(v == null ? "" : v); return /[",;\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }).join(";")).join("\r\n");
+    downloadText(`marcacoes-${year}-${C.pad(month + 1)}.csv`, "﻿" + csv);
+  }
+  // AFD (Arquivo-Fonte de Dados) — leiaute Portaria 671 (tipos 1, 5, 7, 9).
+  async function gerarAFD(year, month) {
+    const c = (State.settings && State.settings.company) || {};
+    const { marc, emps, ini, fim } = await coletaMarc(year, month);
+    const fixL = (s, n) => { s = String(s == null ? "" : s); return (s + " ".repeat(n)).slice(0, n); };
+    const num = (s, n) => String(s == null ? "" : s).replace(/\D/g, "").padStart(n, "0").slice(-n);
+    const nsr9 = (n) => num(n || 0, 9);
+    const dataIso = (dk) => { const d = C.parseKey(dk); const p = (x) => String(x).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()); };
+    const geraDT = isoDT(new Date());
+    const tipoId = c.tipoId === "CPF" ? "2" : "1";
+    const ident = num(c.cnpj, 14);
+    const lines = [];
+    // Tipo 1 — Cabeçalho
+    lines.push(nsr9(0) + "1" + tipoId + ident + num(c.caepf, 14) + fixL(c.razaoSocial || c.name || "", 150) + fixL(c.idRep || "", 17) + dataIso(ini) + dataIso(fim) + geraDT);
+    let seq = 0;
+    // Tipo 5 — inclusão de empregados
+    emps.forEach((e) => { seq++; lines.push(nsr9(seq) + "5" + geraDT + "I" + num(e.cpf, 11) + fixL(e.nome || "", 52)); });
+    // Tipo 7 — marcações de ponto (REP-P). Desconsideradas não entram na jornada, mas ficam no CSV.
+    marc.filter(({ p }) => !p.annulled).forEach(({ e, p }) => { seq++; lines.push(nsr9(p.nsr || seq) + "7" + isoDT(new Date(p.ts)) + num(e.cpf, 11)); });
+    // Tipo 9 — trailer (contagem por tipo)
+    const cont = (t) => num(lines.filter((l) => l.charAt(9) === t).length, 9);
+    lines.push(nsr9(999999999) + "9" + cont("2") + cont("3") + cont("4") + cont("5") + cont("6") + cont("7"));
+    downloadText(`AFD-${year}-${C.pad(month + 1)}.txt`, lines.join("\r\n") + "\r\n");
+  }
+
   function fileToDataURL(file) {
     return new Promise((res, rej) => {
       const r = new FileReader();
@@ -1462,7 +1581,7 @@ window.SHOPBOX_CONFIG = {
       }
       const emp = matched.m.employee;
       const today = C.todayKey();
-      const todays = (await DB.punchesByEmployee(emp.id)).filter((p) => p.dateKey === today)
+      const todays = (await DB.punchesByEmployee(emp.id)).filter((p) => p.dateKey === today && !p.annulled)
         .sort((a, b) => new Date(a.ts) - new Date(b.ts));
       const last = todays[todays.length - 1];
       if (last) {
@@ -1481,6 +1600,7 @@ window.SHOPBOX_CONFIG = {
         id: uid(), employeeId: emp.id, ts: new Date().toISOString(), dateKey: today,
         type, confidence: Number((1 - matched.m.distance).toFixed(3)), photoDataUrl: matched.photo, method: "facial",
       };
+      await stampPunch(punch, emp); // NSR sequencial + hash de integridade (Portaria 671)
       try {
         await DB.savePunch(punch);
       } catch (e) {
@@ -2015,7 +2135,7 @@ window.SHOPBOX_CONFIG = {
     const justifs = (await DB.justificationsByEmployee(id)).filter((j) => j.dateKey === dateKey);
     const ativos = await atestadosCobrindo(id, dateKey);
     const day = C.computeDay(dateKey, {
-      schedule: e.schedule, override: ov, punches: ps,
+      schedule: e.schedule, override: ov, punches: ps.filter((p) => !p.annulled),
       justifications: justifs, atestadoAtivo: ativos.length > 0,
       toleranceMin: State.settings.toleranceMin, heFactor: State.settings.heFactor,
     });
@@ -2029,13 +2149,14 @@ window.SHOPBOX_CONFIG = {
           <div class="stat"><div class="v">${C.minToHM(day.atraso)}</div><div class="l">Atraso</div></div>
         </div>
         <div class="table-wrap">
-          <table><thead><tr><th>#</th><th>Tipo</th><th>Hora</th><th>Foto</th><th>Confiança</th><th></th></tr></thead>
-          <tbody>${ps.map((p, i) => `<tr>
-            <td>${i + 1}</td><td>${esc(p.type)}</td><td>${fmtTime(p.ts)}</td>
+          <table><thead><tr><th>#</th><th>NSR</th><th>Tipo</th><th>Hora</th><th>Foto</th><th>Confiança</th><th></th></tr></thead>
+          <tbody>${ps.map((p, i) => `<tr${p.annulled ? ' style="opacity:.5;text-decoration:line-through"' : ''}>
+            <td>${i + 1}</td><td>${p.nsr || "—"}</td><td>${esc(p.type)}</td><td>${fmtTime(p.ts)}</td>
             <td>${p.photoDataUrl ? `<img src="${p.photoDataUrl}" style="width:36px;height:36px;border-radius:6px;object-fit:cover">` : "—"}</td>
             <td>${p.confidence != null ? Math.round(p.confidence * 100) + "%" : (p.method === "manual" ? "manual" : "—")}</td>
-            <td>${State.isSuper ? `<button class="btn sm danger js-pdel" data-id="${p.id}">×</button>` : '<span class="muted" title="Somente super admin">🔒</span>'}</td></tr>`).join("")
-            || '<tr><td colspan="6" class="muted">Sem marcações neste dia.</td></tr>'}</tbody></table>
+            <td>${p.annulled ? `<span class="tag err" title="${esc(p.annulled.reason||'')}">desconsiderada</span>`
+                : `<button class="btn sm ghost js-pcompr" data-id="${p.id}">comprovante</button>` + (State.isSuper ? ` <button class="btn sm danger js-pann" data-id="${p.id}">desconsiderar</button>` : '')}</td></tr>`).join("")
+            || '<tr><td colspan="7" class="muted">Sem marcações neste dia.</td></tr>'}</tbody></table>
         </div>
         ${day.obs.length ? `<p class="mt">${day.obs.map((o) => `<span class="tag warn">${esc(o)}</span>`).join(" ")}</p>` : ""}
         ${State.isSuper ? `<div class="card mt" style="background:#f8fafc">
@@ -2050,13 +2171,24 @@ window.SHOPBOX_CONFIG = {
         </div>` : `<p class="hint mt">🔒 A edição de marcações é restrita ao super administrador (proteção contra alterações).</p>`}
       </div>`;
 
-    $$(".js-pdel").forEach((b) => (b.onclick = async () => {
-      if (!State.isSuper) return;
-      if (!confirm("Excluir esta marcação? (ficará registrado na auditoria)")) return;
+    // Comprovante de marcação (Portaria 671) — pode reimprimir a qualquer momento
+    $$(".js-pcompr").forEach((b) => (b.onclick = async () => {
       const p = ps.find((x) => x.id === b.dataset.id);
-      await DB.deletePunch(b.dataset.id);
-      if (window.DB.logAudit) await window.DB.logAudit({ id: uid(), employeeId: id, ts: new Date().toISOString(), adminEmail: State.userEmail || "ADM", action: "marcacao", detail: `Excluiu marcação ${p ? p.type + " " + fmtTime(p.ts) : ""} de ${fmtDate(dateKey)}` });
+      if (p) showComprovante(e, p);
+    }));
+    // Inviolabilidade: a marcação NÃO é excluída. É "desconsiderada" com motivo,
+    // preservando o registro original e a trilha de auditoria (exigência da Portaria 671).
+    $$(".js-pann").forEach((b) => (b.onclick = async () => {
+      if (!State.isSuper) return;
+      const p = ps.find((x) => x.id === b.dataset.id);
+      if (!p) return;
+      const motivo = prompt("Motivo para DESCONSIDERAR esta marcação (a marcação original é preservada):", "");
+      if (motivo == null || !motivo.trim()) return;
+      p.annulled = { by: State.userEmail || "ADM", at: new Date().toISOString(), reason: motivo.trim() };
+      await DB.savePunch(p);
+      if (window.DB.logAudit) await window.DB.logAudit({ id: uid(), employeeId: id, ts: new Date().toISOString(), adminEmail: State.userEmail || "ADM", action: "marcacao", detail: `Desconsiderou marcação NSR ${p.nsr || "?"} (${p.type} ${fmtTime(p.ts)}) de ${fmtDate(dateKey)} — motivo: ${motivo.trim()}` });
       renderPunchesFor(id, dateKey);
+      toast("Marcação desconsiderada (registro preservado)", "ok");
     }));
     const pmAdd = $("#pm_add");
     if (pmAdd) pmAdd.onclick = async () => {
@@ -2064,8 +2196,10 @@ window.SHOPBOX_CONFIG = {
       if (!t) return toast("Informe a hora", "err");
       const [h, m] = t.split(":").map(Number);
       const d = C.parseKey(dateKey); d.setHours(h, m, 0, 0);
+      const mp = { id: uid(), employeeId: id, ts: d.toISOString(), dateKey, type: $("#pm_type").value, method: "manual", confidence: null, photoDataUrl: null };
+      await stampPunch(mp, await DB.employee(id));
       try {
-        await DB.savePunch({ id: uid(), employeeId: id, ts: d.toISOString(), dateKey, type: $("#pm_type").value, method: "manual", confidence: null, photoDataUrl: null });
+        await DB.savePunch(mp);
       } catch (e) {
         const msg = (e && (e.message || e.hint)) || "";
         if (/PONTO_COOLDOWN|5 min/i.test(msg)) return toast("Bloqueado: há uma marcação a menos de 5 min desse horário.", "err");
@@ -2356,7 +2490,7 @@ window.SHOPBOX_CONFIG = {
     for (const key of keys) {
       const d = C.parseKey(key);
       const dow = d.getDay();
-      const ps = punches.filter((p) => p.dateKey === key).sort((a, b) => new Date(a.ts) - new Date(b.ts));
+      const ps = punches.filter((p) => p.dateKey === key && !p.annulled).sort((a, b) => new Date(a.ts) - new Date(b.ts));
       const ov = overrides.find((o) => o.dateKey === key);
       const exp = C.expectedForDay(e.schedule, key, ov);
       const worked = Math.round(C.workedFromPunches(ps).worked);
@@ -2490,6 +2624,7 @@ window.SHOPBOX_CONFIG = {
   async function renderSettings() {
     const s = State.settings;
     const el = $("#tab-settings");
+    const now = new Date();
     const cloud = !!window.DB.isCloud;
     const secCard = cloud
       ? `<div class="card mt"><h2>Segurança</h2>
@@ -2507,8 +2642,15 @@ window.SHOPBOX_CONFIG = {
           <div class="field" style="flex:2"><label>Razão Social (aparece na folha)</label><input id="cfg_razao" value="${esc(s.company.razaoSocial || "")}"></div>
         </div>
         <div class="row">
-          <div class="field"><label>CNPJ</label><input id="cfg_cnpj" value="${esc(s.company.cnpj || "")}"></div>
+          <div class="field"><label>Tipo de identificador</label><select id="cfg_tipoid">
+            <option value="CNPJ" ${s.company.tipoId !== "CPF" ? "selected" : ""}>CNPJ</option>
+            <option value="CPF" ${s.company.tipoId === "CPF" ? "selected" : ""}>CPF</option></select></div>
+          <div class="field"><label>CNPJ / CPF do empregador</label><input id="cfg_cnpj" value="${esc(s.company.cnpj || "")}"></div>
           <div class="field"><label>Inscrição Estadual (IE)</label><input id="cfg_ie" value="${esc(s.company.ie || "")}"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label>CAEPF / CNO (se houver)</label><input id="cfg_caepf" value="${esc(s.company.caepf || "")}"></div>
+          <div class="field" style="flex:2"><label>Identificador do REP-P (registro INPI) — Portaria 671</label><input id="cfg_idrep" value="${esc(s.company.idRep || "")}" placeholder="ex.: nº do registro do programa no INPI"></div>
         </div>
         <div class="row">
           <div class="field"><label>Endereço / Nº</label><input id="cfg_numero" value="${esc(s.company.numero || "")}"></div>
@@ -2543,6 +2685,19 @@ window.SHOPBOX_CONFIG = {
       <div class="mt right"><button class="btn primary" id="cfg_save">Salvar configurações</button></div>
 
       <div class="card mt">
+        <h2>Ponto legal — Portaria MTP 671/2021</h2>
+        <p class="muted">Exportações para fiscalização. Escolha o mês/ano de referência.</p>
+        <div class="row">
+          <div class="field"><label>Mês</label><select id="afd_month">${C.MONTHS.map((m, i) => `<option value="${i}" ${i === now.getMonth() ? "selected" : ""}>${m}</option>`).join("")}</select></div>
+          <div class="field"><label>Ano</label><input type="number" id="afd_year" value="${now.getFullYear()}"></div>
+          <div class="field" style="display:flex;align-items:flex-end;gap:8px">
+            <button class="btn accent" id="btn_afd">⬇ AFD (.txt)</button>
+            <button class="btn ghost" id="btn_csv">⬇ Marcações (.csv)</button>
+          </div>
+        </div>
+        <p class="hint">O AFD segue o leiaute da Portaria 671 (datas ISO 8601). <b>Antes do uso legal, valide o arquivo em um validador oficial de AFD</b> e assine com certificado ICP-Brasil. O CSV é um backup legível das marcações (com NSR e hash).</p>
+      </div>
+      <div class="card mt">
         <h2>Backup dos dados</h2>
         <p class="muted">Os dados ficam salvos apenas neste navegador/dispositivo. Faça backups periódicos.</p>
         <button class="btn ghost" id="cfg_export">⬇ Exportar backup (.json)</button>
@@ -2566,6 +2721,7 @@ window.SHOPBOX_CONFIG = {
         name: $("#cfg_name").value.trim() || "ShopBox", razaoSocial: $("#cfg_razao").value.trim(), cnpj: $("#cfg_cnpj").value.trim(),
         ie: $("#cfg_ie").value.trim(), numero: $("#cfg_numero").value.trim(), bairro: $("#cfg_bairro").value.trim(),
         cep: $("#cfg_cep").value.trim(), cidade: $("#cfg_cidade").value.trim(), uf: $("#cfg_uf").value.trim(),
+        tipoId: $("#cfg_tipoid").value, caepf: $("#cfg_caepf").value.trim(), idRep: $("#cfg_idrep").value.trim(),
         logoDataUrl: newLogo,
       });
       await DB.setSetting("toleranceMin", parseInt($("#cfg_tol").value, 10) || 0);
@@ -2574,6 +2730,9 @@ window.SHOPBOX_CONFIG = {
       await loadSettings();
       toast("Configurações salvas", "ok");
     };
+    const afdMY = () => ({ y: parseInt($("#afd_year").value, 10), m: parseInt($("#afd_month").value, 10) });
+    $("#btn_afd").onclick = async () => { const { y, m } = afdMY(); try { await gerarAFD(y, m); toast("AFD gerado", "ok"); } catch (e) { console.error(e); toast("Erro ao gerar AFD", "err"); } };
+    $("#btn_csv").onclick = async () => { const { y, m } = afdMY(); try { await gerarCSVMarc(y, m); toast("CSV gerado", "ok"); } catch (e) { console.error(e); toast("Erro ao gerar CSV", "err"); } };
     $("#cfg_export").onclick = async () => {
       const dump = await DB.exportAll();
       downloadFile(`backup-shopbox-ponto-${C.todayKey()}.json`, JSON.stringify(dump), "application/json");
