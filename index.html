@@ -2346,14 +2346,30 @@ window.SHOPBOX_CONFIG = {
           desc = hm(expMin); faltasMin += expMin;
           marksTxt = marksArr.length ? marksArr.join("  ") + "  FALTA" : "FALTA  FALTA";
           valMin = 0; // dia de trabalho sem marcação => R$ 0,00
-        } else if (worked < expMin) {
-          trab = hm(worked); desc = hm(expMin - worked); saidaAnt += (expMin - worked); horasTrab += worked;
-          marksTxt = marksArr.join("  "); valMin = worked;
         } else {
-          trab = hm(expMin); horasTrab += expMin;
-          const sur = worked - expMin;
-          if (sur > 0) { extras = hm(sur); if (dow === 0) extra100 += sur; else extra50 += sur; }
+          horasTrab += Math.min(worked, expMin);
           marksTxt = marksArr.join("  "); valMin = worked;
+          const tol = (State.settings && State.settings.toleranceMin) || 0;
+          if (worked >= expMin) {
+            // Cumpriu (ou superou) a jornada -> sem desconto; excedente é hora extra.
+            trab = hm(expMin);
+            const sur = worked - expMin;
+            if (sur > 0) { extras = hm(sur); if (dow === 0) extra100 += sur; else extra50 += sur; }
+          } else {
+            trab = hm(worked);
+            // Faltou tempo p/ fechar a jornada. A tolerância se aplica ao total do dia.
+            const shortfall = expMin - worked;
+            if (shortfall > tol) {
+              const wf = C.workedFromPunches(ps);
+              const endMin = exp.end ? C.hmToMin(exp.end) : null;
+              // saída antecipada real; o restante (atraso na chegada ou intervalo maior) conta como atraso
+              const rawEarly = (endMin != null && wf.last && ps.length >= 2) ? Math.max(0, endMin - C.dateToMin(wf.last)) : 0;
+              const sa = Math.min(rawEarly, shortfall);
+              const atr = shortfall - sa;
+              atrasos += atr; saidaAnt += sa;
+              desc = hm(atr + sa);
+            }
+          }
         }
       }
       const dayVal = valMin == null ? null : (valMin / 60) * rate;
