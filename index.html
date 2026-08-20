@@ -1625,6 +1625,17 @@ window.SHOPBOX_CONFIG = {
 
   async function empModal(id) {
     const e = id ? await DB.employee(id) : {};
+    // Jornada editável: lê horário/dias atuais (ou padrão) para preencher os campos.
+    const _wk = (e.schedule && e.schedule.days) || [];
+    const _fw = _wk.find((d) => d && d.work) || { start: "08:00", end: "18:00", breakMin: 60 };
+    const jStart = _fw.start || "08:00";
+    const jEnd = _fw.end || "18:00";
+    const jBreak = _fw.breakMin != null ? _fw.breakMin : 60;
+    const _dl = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+    const jWorked = _dl.map((_, i) => (_wk[i] ? !!_wk[i].work : i < 5)); // padrão Seg–Sex
+    const dayChecks = _dl.map((lb, i) =>
+      `<label style="display:inline-flex;align-items:center;gap:4px;margin-right:10px;cursor:pointer;font-weight:500">
+        <input type="checkbox" class="j_day" data-i="${i}" ${jWorked[i] ? "checked" : ""} style="width:auto"> ${lb}</label>`).join("");
     openModal(`
       <h2>${id ? "Editar" : "Novo"} colaborador</h2>
       <div class="row">
@@ -1651,6 +1662,16 @@ window.SHOPBOX_CONFIG = {
           <input type="checkbox" id="e_nr" ${e.nr ? "checked" : ""} style="width:auto"> Não registrado (NR) — usa R$ 14,00/hora fixo
         </label></div>
       </div>
+      <div style="border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:6px">
+        <div style="font-weight:600;margin-bottom:8px">Jornada de trabalho (horário esperado)</div>
+        <div class="row">
+          <div class="field"><label>Entrada</label><input id="j_start" type="time" value="${jStart}"></div>
+          <div class="field"><label>Saída</label><input id="j_end" type="time" value="${jEnd}"></div>
+          <div class="field"><label>Intervalo (min)</label><input id="j_break" type="number" min="0" step="5" value="${jBreak}"></div>
+        </div>
+        <div style="margin-top:6px"><label style="display:block;margin-bottom:4px">Dias de trabalho</label>${dayChecks}</div>
+        <div class="muted" style="font-size:.8rem;margin-top:6px">Esse horário é a referência para atraso/saída antecipada. O pagamento é sempre por horas trabalhadas.</div>
+      </div>
       <div class="mt right">
         ${id ? '<button class="btn danger" id="e_del" style="float:left">Excluir</button>' : ""}
         <button class="btn ghost" id="e_cancel">Cancelar</button>
@@ -1667,6 +1688,17 @@ window.SHOPBOX_CONFIG = {
       const nome = $("#e_nome").value.trim();
       if (!nome) return toast("Informe o nome", "err");
       const nr = !!(nrChk && nrChk.checked);
+      // Monta a jornada editável (1 semana, repetindo) a partir dos campos.
+      const js = $("#j_start").value || "08:00";
+      const je = $("#j_end").value || "18:00";
+      const jb = parseInt($("#j_break").value, 10) || 0;
+      const workedDays = [false, false, false, false, false, false, false];
+      $$(".j_day").forEach((c) => { workedDays[parseInt(c.dataset.i, 10)] = c.checked; });
+      const schedule = {
+        anchor: (e.schedule && e.schedule.anchor) || C.mondayOf(C.todayKey()),
+        cycleWeeks: 1,
+        days: workedDays.map((w) => (w ? { work: true, start: js, end: je, breakMin: jb } : { work: false, start: "", end: "", breakMin: 0 })),
+      };
       const emp = Object.assign({}, e, {
         id: e.id || uid(),
         nome, matricula: $("#e_mat").value.trim(), cargo: $("#e_cargo").value.trim(),
@@ -1675,7 +1707,7 @@ window.SHOPBOX_CONFIG = {
         valorHora: nr ? 14.00 : (parseFloat($("#e_vh").value) || 0),
         admissao: $("#e_adm").value, ativo: $("#e_ativo").value === "true",
         faceDescriptors: e.faceDescriptors || [], photoDataUrl: e.photoDataUrl || null,
-        schedule: e.schedule || defaultSchedule(),
+        schedule,
       });
       await DB.saveEmployee(emp);
       await refreshEmployees();
