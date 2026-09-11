@@ -470,7 +470,7 @@ tr:last-child td { border-bottom: 0; }
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- Supabase + backend em nuvem -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.116.0"></script>
   <script>
 /* ==== config ==== */
 window.SHOPBOX_CONFIG = {
@@ -1001,12 +1001,14 @@ window.SHOPBOX_CONFIG = {
 (function (global) {
   "use strict";
 
-  const DEFAULT_MODELS_URL = "https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights";
+  // Commit imutável correspondente à tag oficial face-api.js 0.22.2.
+  const FACE_API_COMMIT = "8609b25a15f417398a4d2b95dc91985cd1e0c0c3";
+  const DEFAULT_MODELS_URL = `https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@${FACE_API_COMMIT}/weights`;
   // CDNs alternativos (mesmos arquivos de peso). Se um travar/falhar, tenta o próximo.
   const MODEL_URLS = [
     DEFAULT_MODELS_URL,
-    "https://cdn.statically.io/gh/justadudewhohacks/face-api.js/master/weights",
-    "https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights",
+    `https://cdn.statically.io/gh/justadudewhohacks/face-api.js/${FACE_API_COMMIT}/weights`,
+    `https://raw.githubusercontent.com/justadudewhohacks/face-api.js/${FACE_API_COMMIT}/weights`,
     "https://unpkg.com/face-api.js@0.22.2/weights",
   ];
   const LOAD_TIMEOUT_MS = 20000; // não deixa "carregando" para sempre
