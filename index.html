@@ -1366,7 +1366,7 @@ window.SHOPBOX_CONFIG = {
     return `<select id="${id}" class="store-select">${opts.join("")}</select>`;
   }
   function empsByStore() {
-    return adminStore ? State.employees.filter((e) => (e.loja || "") === adminStore) : State.employees;
+    return adminStore ? State.employees.filter((e) => (e.loja || "").trim().toLowerCase() === adminStore.trim().toLowerCase()) : State.employees;
   }
 
   // Determina papel do usuário logado (nuvem). Retorna false se não for admin.
@@ -1572,7 +1572,8 @@ window.SHOPBOX_CONFIG = {
     if (punchBusy) return;
     if (window.DB.isCloud && !State.hasSession) { showStatus("err", "Dispositivo não ativado — faça login em Administração."); return; }
     const store = getKioskStore();
-    const withFaces = State.employees.filter((e) => e.ativo !== false && (e.faceDescriptors || []).length && (!store || (e.loja || "") === store));
+    const _nl = (s) => (s || "").trim().toLowerCase();
+    const withFaces = State.employees.filter((e) => e.ativo !== false && (e.faceDescriptors || []).length && (!store || _nl(e.loja) === _nl(store)));
     if (!withFaces.length) { showStatus("idle", "Nenhum colaborador com rosto cadastrado" + (store ? " nesta loja" : "") + "."); return; }
 
     punchBusy = true;
@@ -1659,7 +1660,7 @@ window.SHOPBOX_CONFIG = {
     const store = getKioskStore();
     const all = [];
     for (const e of State.employees) {
-      if (store && (e.loja || "") !== store) continue;
+      if (store && (e.loja || "").trim().toLowerCase() !== store.trim().toLowerCase()) continue;
       const ps = (await DB.punchesByEmployee(e.id)).filter((p) => p.dateKey === today);
       ps.forEach((p) => all.push({ p, name: e.nome }));
     }
